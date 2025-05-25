@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   Sparkles,
   NotebookText,
+  FileSignature, // Added for Contracts
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
@@ -39,7 +40,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
-} from "@/components/ui/sidebar"; // Using the custom sidebar from ui
+} from "@/components/ui/sidebar"; 
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
@@ -57,7 +58,7 @@ export function AppSidebar() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
-  const { state: sidebarState } = useSidebar(); // Get sidebar state
+  const { state: sidebarState } = useSidebar(); 
 
   const handleLogout = async () => {
     try {
@@ -75,17 +76,15 @@ export function AppSidebar() {
     { href: "/dashboard/projects", label: "Projetos", icon: Briefcase },
     { href: "/dashboard/labels", label: "Etiquetas", icon: Tag },
     { href: "/dashboard/technical-sheets", label: "Fichas Técnicas", icon: NotebookText },
+    { href: "/dashboard/contracts", label: "Contratos", icon: FileSignature }, // New Contract Link
     { href: "/dashboard/smart-suggestions", label: "Sugestões IA", icon: Sparkles },
     { href: "/dashboard/company", label: "Minha Empresa", icon: Building },
-    // { href: "/dashboard/reports", label: "Relatórios", icon: BarChart3 }, // Future
   ];
 
   const adminMenuItems = [
     { href: "/admin", label: "Painel Admin", icon: ShieldCheck },
     { href: "/admin/users", label: "Usuários", icon: UserCog },
     { href: "/admin/templates", label: "Templates Globais", icon: Settings },
-    // { href: "/admin/plans", label: "Planos", icon: CreditCard }, // Future
-    // { href: "/admin/system-stats", label: "Estatísticas", icon: BarChartBig }, // Future
   ];
 
   const menuItems = isAdmin ? [...commonMenuItems, ...adminMenuItems] : commonMenuItems;
@@ -106,7 +105,7 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
               <Link href={item.href} passHref legacyBehavior>
                 <SidebarMenuButton
-                  isActive={pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))}
+                  isActive={pathname === item.href || (item.href !== "/dashboard" && item.href !== "/admin" && pathname.startsWith(item.href)) || (item.href === "/admin" && pathname.startsWith("/admin"))}
                   tooltip={item.label}
                   aria-label={item.label}
                   className="justify-start"
@@ -122,21 +121,6 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-2 mt-auto">
         <SidebarMenu>
-           {/* Example of a submenu
-           <SidebarMenuItem>
-            <SidebarMenuButton className="justify-start">
-              <HelpCircle className="shrink-0" /> Ajuda
-            </SidebarMenuButton>
-            <SidebarMenuSub>
-              <SidebarMenuSubItem>
-                <Link href="/help/faq" passHref legacyBehavior><SidebarMenuSubButton>FAQ</SidebarMenuSubButton></Link>
-              </SidebarMenuSubItem>
-              <SidebarMenuSubItem>
-                <Link href="/help/contact" passHref legacyBehavior><SidebarMenuSubButton>Contato</SidebarMenuSubButton></Link>
-              </SidebarMenuSubItem>
-            </SidebarMenuSub>
-          </SidebarMenuItem>
-          */}
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleLogout} className="justify-start" tooltip="Sair" aria-label="Sair">
               <LogOut className="shrink-0" />
