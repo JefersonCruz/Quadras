@@ -1,4 +1,3 @@
-
 // src/lib/pdfUtils.ts
 'use client';
 
@@ -8,7 +7,6 @@ import autoTable from 'jspdf-autotable';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// Extend jsPDF with autoTable - this is how the plugin is typically used
 interface jsPDFWithAutoTable extends jsPDF {
   autoTable: (options: any) => jsPDF;
 }
@@ -20,87 +18,120 @@ export async function generateTechnicalSheetPdf(fichaData: FichaTecnica): Promis
     const pageWidth = doc.internal.pageSize.width;
     let yPos = 0;
 
+    // Margins and Content Width
     const margin = 10;
     const contentWidth = pageWidth - 2 * margin;
 
-    // Colors (approximations)
-    const headerBlue = [25, 75, 125]; // RGB for dark blue
-    const textDark = [51, 51, 51]; // Dark grey for text
-    const textLight = [255, 255, 255]; // White
-    const accentOrange = [255, 152, 0]; // Orange for lightning bolt
+    // Colors (approximations from the model image)
+    const primaryBlue = [25, 75, 125]; // Dark blue for header
+    const accentColor = [255, 152, 0]; // Orange/Yellow for "bolt" and highlights
+    const textColorDark = [50, 50, 50]; // Dark grey for text
+    const textColorLight = [255, 255, 255]; // White for text on dark background
+    const tableHeaderGray = [220, 220, 220]; // Light gray for table headers
+    const tableRowGray = [245, 245, 245]; // Lighter gray for alternate table rows
+    const lineColor = [200, 200, 200]; // Light grey for separator lines
 
-    // --- SEÇÃO 1: Cabeçalho Principal (Azul) ---
-    const headerHeight = 40;
-    doc.setFillColor(headerBlue[0], headerBlue[1], headerBlue[2]);
-    doc.rect(0, 0, pageWidth, headerHeight, 'F');
-    yPos = 15; // Start text within the blue header
+    // Font Sizes
+    const fontSizeTitle = 18;
+    const fontSizeSubtitle = 14;
+    const fontSizeBody = 10;
+    const fontSizeSmall = 8;
+    const fontSizeTableHead = 9;
+    const fontSizeTableBody = 8;
 
-    // Placeholder for Lightning Bolt Icon (using a simple shape or text)
-    doc.setFillColor(accentOrange[0], accentOrange[1], accentOrange[2]);
-    doc.circle(pageWidth / 2, yPos, 5, 'F'); // Simple circle
-    doc.setFontSize(18);
-    doc.setTextColor(textLight[0], textLight[1], textLight[2]);
+    // --- Section 1: Main Header ---
+    const mainHeaderHeight = 30;
+    doc.setFillColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+    doc.rect(0, 0, pageWidth, mainHeaderHeight, 'F');
+
+    // "ENERGY" Text & Bolt Icon Placeholder
     doc.setFont(undefined, 'bold');
-    // Simulating the text "ENERGY"
-    const energyText = "ENERGY";
-    const energyTextWidth = doc.getStringUnitWidth(energyText) * 18 / doc.internal.scaleFactor;
-    doc.text(energyText, (pageWidth - energyTextWidth) / 2, yPos + 15);
+    doc.setFontSize(fontSizeTitle);
+    doc.setTextColor(textColorLight[0], textColorLight[1], textColorLight[2]);
+    const energyText = "ANODE"; // Placeholder for the stylized "ENERGY"
+    const energyTextWidth = doc.getStringUnitWidth(energyText) * fontSizeTitle / doc.internal.scaleFactor;
+    doc.text(energyText, margin + 5, mainHeaderHeight / 2 + 5);
 
-    yPos = headerHeight + 10; // Position after blue header
+    // Simple Bolt Placeholder (e.g., a star or multiple lines)
+    doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+    // Using a simple filled circle as a placeholder for the bolt for now
+    // doc.circle(margin + energyTextWidth + 15, mainHeaderHeight / 2 + 3, 3, 'F');
+    // A more "bolt-like" placeholder:
+    const boltX = margin + energyTextWidth + 15;
+    const boltY = mainHeaderHeight / 2 - 2;
+    doc.setLineWidth(1);
+    doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
+    doc.line(boltX - 2, boltY + 2, boltX, boltY -2);
+    doc.line(boltX, boltY -2, boltX, boltY +3);
+    doc.line(boltX, boltY + 3, boltX + 2, boltY - 1);
 
-    // --- SEÇÃO 2: Identificação da Ficha ---
-    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    doc.setFontSize(16);
-    doc.setFont(undefined, 'bold');
-    const tituloFichaText = fichaData.tituloFicha || "FICHA TÉCNICA – QUADRO DE DISTRIBUIÇÃO";
-    const tituloWidth = doc.getStringUnitWidth(tituloFichaText) * 16 / doc.internal.scaleFactor;
-    doc.text(tituloFichaText, (pageWidth - tituloWidth) / 2, yPos);
-    yPos += 8;
 
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-    yPos = doc.getTextDimensions(fichaData.identificacaoLocal, { fontSize: 10, maxWidth: contentWidth }).h > 5 ? yPos + 5 : yPos;
-    doc.text(`Local: ${fichaData.identificacaoLocal}`, margin, yPos);
-    yPos += 5;
-    doc.text(`Data: ${fichaData.dataInstalacao ? format(fichaData.dataInstalacao.toDate(), "dd/MM/yyyy", { locale: ptBR }) : 'N/A'}`, margin, yPos);
-    yPos += 5;
-    doc.text(`Responsável: ${fichaData.responsavelTecnico}`, margin, yPos);
-    yPos += 5;
-
-    // Placeholder for small "ENERGY" logo (text based)
+    // Company Logo / Name (Top Right)
     if (fichaData.logotipoEmpresaUrl) {
-        // In a real scenario, you'd fetch and draw the image. For now, text placeholder.
-        doc.setFontSize(8);
-        doc.text(`Logo: ${fichaData.nomeEmpresa || "Empresa"}`, pageWidth - margin - 40, yPos - 10, { align: 'right' });
-    } else if(fichaData.nomeEmpresa) {
-        doc.setFontSize(8);
-        doc.text(fichaData.nomeEmpresa, pageWidth - margin - 40, yPos - 10, { align: 'right' });
+      // Placeholder for actual image rendering
+      doc.setFontSize(fontSizeSmall);
+      doc.setTextColor(textColorLight[0], textColorLight[1], textColorLight[2]);
+      doc.text("Logo", pageWidth - margin - 20, mainHeaderHeight / 2 - 2, { align: 'right' });
+      doc.text(fichaData.nomeEmpresa || "Empresa", pageWidth - margin - 20, mainHeaderHeight / 2 + 4, { align: 'right', maxWidth: 40 });
+    } else if (fichaData.nomeEmpresa) {
+      doc.setFontSize(fontSizeSmall);
+      doc.setTextColor(textColorLight[0], textColorLight[1], textColorLight[2]);
+      doc.text(fichaData.nomeEmpresa, pageWidth - margin, mainHeaderHeight / 2 + 3, { align: 'right', maxWidth: 60 });
     }
 
+    yPos = mainHeaderHeight + 15;
 
-    yPos += 5; // Space before table
-    doc.setFontSize(10);
-
-
-    // --- SEÇÃO 3: Tabela de Distribuição dos Circuitos ---
-    doc.setFontSize(12);
+    // --- Section 2: Document Identification ---
+    doc.setTextColor(textColorDark[0], textColorDark[1], textColorDark[2]);
     doc.setFont(undefined, 'bold');
-    doc.text("Distribuição dos Circuitos", margin, yPos);
-    yPos += 6;
+    doc.setFontSize(fontSizeSubtitle);
+    const tituloFichaText = fichaData.tituloFicha || "FICHA TÉCNICA – QUADRO DE DISTRIBUIÇÃO";
+    const tituloWidth = doc.getStringUnitWidth(tituloFichaText) * fontSizeSubtitle / doc.internal.scaleFactor;
+    doc.text(tituloFichaText, (pageWidth - tituloWidth) / 2, yPos);
+    yPos += 10;
 
-    const tableColumnStyles = {
-      0: { cellWidth: 15 }, // Nº
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(fontSizeBody);
+    const fieldSpacing = 6;
+    const col1X = margin;
+    const col2X = pageWidth / 2;
+
+    doc.text(`Local / Identificação:`, col1X, yPos);
+    doc.text(fichaData.identificacaoLocal, col1X + 45, yPos, {maxWidth: contentWidth - 45 - margin});
+    yPos += doc.getTextDimensions(fichaData.identificacaoLocal, { fontSize: fontSizeBody, maxWidth: contentWidth - 45 - margin }).h + (fieldSpacing/2);
+
+
+    doc.text(`Data da Instalação:`, col1X, yPos);
+    doc.text(fichaData.dataInstalacao ? format(fichaData.dataInstalacao.toDate(), "dd/MM/yyyy", { locale: ptBR }) : 'N/A', col1X + 45, yPos);
+    yPos += fieldSpacing;
+
+    doc.text(`Responsável Técnico:`, col1X, yPos);
+    doc.text(fichaData.responsavelTecnico, col1X + 45, yPos, {maxWidth: contentWidth - 45 - margin});
+    yPos += fieldSpacing;
+    
+    doc.text(`Versão da Ficha:`, col1X, yPos);
+    doc.text(fichaData.versaoFicha || "v1.0", col1X + 45, yPos);
+    yPos += 10;
+
+    // --- Section 3: Circuit Distribution Table ---
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(fontSizeBody);
+    doc.text("Distribuição dos Circuitos", margin, yPos);
+    yPos += 7;
+
+    const tableColumnStyles: {[key: number]: object} = {
+      0: { cellWidth: 15, halign: 'center' }, // Nº
       1: { cellWidth: 50 }, // Circuito
       2: { cellWidth: 35 }, // Disjuntor
-      3: { cellWidth: 30 }, // Cabo
+      3: { cellWidth: 25, halign: 'center' }, // Cabo
       4: { cellWidth: 'auto' },// Observações
     };
 
     const tableData = fichaData.circuitos.map((circ, index) => [
       (index + 1).toString(),
-      circ.nome,
-      circ.disjuntor,
-      circ.caboMM,
+      circ.nome || "-",
+      circ.disjuntor || "-",
+      circ.caboMM || "-",
       circ.observacoes || "-",
     ]);
 
@@ -109,106 +140,165 @@ export async function generateTechnicalSheetPdf(fichaData: FichaTecnica): Promis
       head: [['Nº', 'Circuito', 'Disjuntor', 'Cabo (mm²)', 'Observações']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [220, 220, 220], textColor: textDark, fontStyle: 'bold', fontSize:9 },
-      bodyStyles: { textColor: textDark, fontSize: 8, cellPadding: 1.5 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
+      headStyles: { 
+        fillColor: tableHeaderGray, 
+        textColor: textColorDark, 
+        fontStyle: 'bold', 
+        fontSize: fontSizeTableHead,
+        halign: 'center'
+      },
+      bodyStyles: { 
+        textColor: textColorDark, 
+        fontSize: fontSizeTableBody, 
+        cellPadding: 1.5,
+        minCellHeight: 6
+      },
+      alternateRowStyles: { fillColor: tableRowGray },
       columnStyles: tableColumnStyles,
       margin: { left: margin, right: margin },
-      didDrawPage: (data) => { // Capture yPos after table
-        yPos = data.cursor?.y || yPos;
+      tableWidth: 'auto',
+      didDrawPage: (data) => { yPos = data.cursor?.y || yPos; }
+    });
+    yPos = (doc as any).lastAutoTable.finalY ? (doc as any).lastAutoTable.finalY + 8 : yPos + 10;
+
+
+    // --- Section 4: Technical Observations ---
+    const checkPageBreak = (neededHeight: number) => {
+      if (yPos + neededHeight > pageHeight - margin) {
+        doc.addPage();
+        yPos = margin;
       }
-    });
-    // yPos is updated by autoTable's didDrawPage hook or its finalY property
-    yPos = (doc as any).lastAutoTable.finalY ? (doc as any).lastAutoTable.finalY + 5 : yPos + 10;
-
-
-    // --- SEÇÃO 4: Observações Técnicas ---
-    if (yPos > pageHeight - 60) { doc.addPage(); yPos = margin; } // Check for page break
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Conforme NBR 5410`, margin, yPos);
-    yPos += 5;
-    let obsDRText = `Observações: Disjuntor DR ${fichaData.observacaoDR ? 'instalado' : 'não instalado'}.`;
-    if (fichaData.observacaoDR && fichaData.descricaoDROpcional) {
-      obsDRText += ` ${fichaData.descricaoDROpcional}`;
-    } else if (!fichaData.observacaoDR && fichaData.descricaoDROpcional) {
-       obsDRText += ` ${fichaData.descricaoDROpcional}`;
-    }
-    doc.text(obsDRText, margin, yPos, {maxWidth: contentWidth});
-    yPos += doc.getTextDimensions(obsDRText, { fontSize: 10, maxWidth: contentWidth }).h + 2;
-
-
-    doc.text(`Acesso aos projetos online`, margin, yPos);
-    yPos += 8;
-
-    // --- SEÇÃO 5: QR Code e Contato ---
-    if (yPos > pageHeight - 50) { doc.addPage(); yPos = margin; }
-    const qrSectionX = margin;
-    const contactSectionX = pageWidth / 2 + 5;
-    const qrSize = 25;
-
-    // Placeholder for QR Code
-    doc.setFillColor(230, 230, 230);
-    doc.rect(qrSectionX, yPos, qrSize, qrSize, 'F');
-    doc.setFontSize(8);
-    doc.text("QR", qrSectionX + qrSize/2, yPos + qrSize/2, {align: 'center', baseline: 'middle'});
-
-    doc.setFontSize(9);
-    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    const qrTextX = qrSectionX + qrSize + 5;
-    let qrTextY = yPos + 5;
-    doc.text("→ Informação completa", qrTextX, qrTextY);
-    qrTextY += 5;
-    doc.text(fichaData.linkFichaPublica || "www.exemplo.com", qrTextX, qrTextY, {
-        // Uncomment to make it a clickable link if a valid URL is present
-        // ...(fichaData.linkFichaPublica && {link: {url: fichaData.linkFichaPublica, options: {pageNumber: 1}}})
-    });
-
-    // Contato e Assinatura
-    const signatureYStart = yPos;
-    doc.setFontSize(10);
-    doc.text(fichaData.nomeEletricista, contactSectionX, signatureYStart + 5, {maxWidth: contentWidth/2 -10});
-    doc.setFontSize(8);
-    doc.text("Eng. Eletricista", contactSectionX, signatureYStart + 9); // Role underneath
-    if (fichaData.assinaturaEletricistaUrl) {
-        doc.text(`Assinatura: (ver URL)`, contactSectionX, signatureYStart + 15, {maxWidth: contentWidth/2 -10});
-    } else {
-        // Placeholder for signature line
-        doc.line(contactSectionX, signatureYStart + 13, contactSectionX + 40, signatureYStart + 13);
-    }
-
-    // Placeholder for WhatsApp icon
-    doc.setFillColor(37, 211, 102); // WhatsApp Green
-    doc.circle(contactSectionX -1, signatureYStart + 20, 1.5, 'F'); // Small circle for icon placeholder
-    doc.text(fichaData.contatoEletricista, contactSectionX + 3, signatureYStart + 21);
-
-
-    // --- SEÇÃO 6: Portaria ---
-    yPos = Math.max(yPos + qrSize, signatureYStart + 25) + 10; // Position below QR and Signature
-    if (yPos > pageHeight - 20) { doc.addPage(); yPos = margin; }
-    doc.setDrawColor(150,150,150); // Light grey for lines
-    doc.line(margin, yPos, pageWidth - margin, yPos); // Horizontal line
-    yPos +=5;
-    doc.setFontSize(10);
+    };
+    checkPageBreak(30); 
+    
     doc.setFont(undefined, 'bold');
-    doc.text("Portaria", margin, yPos);
-    doc.setFont(undefined, 'normal');
-    doc.text(fichaData.ramalPortaria || "-", margin + 25, yPos);
-    doc.line(margin, yPos+2, pageWidth - margin, yPos+2); // Horizontal line
+    doc.setFontSize(fontSizeBody);
+    doc.text("Observações Técnicas", margin, yPos);
     yPos += 7;
 
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(fontSizeSmall);
+    doc.text(`Referência Normativa: ${fichaData.observacaoNBR || "Conforme NBR 5410"}`, margin, yPos);
+    yPos += fieldSpacing;
 
-    // --- SEÇÃO 7: Rodapé ---
-    if (yPos > pageHeight - 15) { doc.addPage(); yPos = margin; }
-    doc.setFontSize(8);
-    const footerText = `Ficha técnica atualizada em ${format(fichaData.dataCriacao?.toDate() || new Date(), "dd/MM/yyyy", { locale: ptBR })}`;
-    const footerTextWidth = doc.getStringUnitWidth(footerText) * 8 / doc.internal.scaleFactor;
-    doc.text(footerText, (pageWidth - footerTextWidth) / 2, pageHeight - margin + 5); // Centered at bottom
+    let obsDRText = `Dispositivo DR: ${fichaData.observacaoDR ? 'Instalado' : 'Não instalado'}.`;
+    if (fichaData.descricaoDROpcional) {
+      obsDRText += ` Detalhes: ${fichaData.descricaoDROpcional}`;
+    }
+    doc.text(obsDRText, margin, yPos, { maxWidth: contentWidth });
+    yPos += doc.getTextDimensions(obsDRText, { fontSize: fontSizeSmall, maxWidth: contentWidth }).h + fieldSpacing;
+    
+    doc.text(`Acesso Online: ${fichaData.textoAcessoOnline || "Acesso aos projetos online"}`, margin, yPos);
+    yPos += 8;
 
-    doc.save(`ficha-tecnica-${fichaData.identificacaoLocal.replace(/\s+/g, '_').toLowerCase() || 'geral'}.pdf`);
+
+    // --- Section 5: QR Code & Contact ---
+    checkPageBreak(50);
+    const qrSize = 30;
+    const qrSectionX = margin;
+    const contactSectionX = margin + qrSize + 15; // X for contact info, to the right of QR
+    const contactSectionWidth = contentWidth - qrSize - 15;
+
+
+    // QR Code Placeholder
+    doc.setFillColor(230, 230, 230); // Light grey for placeholder
+    doc.rect(qrSectionX, yPos, qrSize, qrSize, 'F');
+    doc.setFontSize(fontSizeSmall);
+    doc.setTextColor(textColorDark[0], textColorDark[1], textColorDark[2]);
+    doc.text("QR Code", qrSectionX + qrSize / 2, yPos + qrSize / 2, { align: 'center', baseline: 'middle' });
+    doc.setFontSize(fontSizeSmall -1);
+    doc.text(fichaData.linkFichaPublica || "Link para acesso online", qrSectionX + qrSize/2, yPos + qrSize + 4, {align: 'center', maxWidth: qrSize + 10})
+
+
+    // Contact & Signature (right of QR)
+    let contactY = yPos;
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(fontSizeBody);
+    doc.text("Contato Técnico:", contactSectionX, contactY);
+    contactY += fieldSpacing;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(fontSizeSmall);
+    doc.text(fichaData.nomeEletricista, contactSectionX, contactY, {maxWidth: contactSectionWidth});
+    contactY += 5;
+    doc.text("Téc. Eletricista / Responsável", contactSectionX, contactY, {maxWidth: contactSectionWidth});
+    contactY += 5;
+    
+    // Signature Placeholder
+    if (fichaData.assinaturaEletricistaUrl) {
+        doc.text(`Assinatura: (Digital)`, contactSectionX, contactY, {maxWidth: contactSectionWidth});
+    } else {
+        doc.text(`Assinatura:`, contactSectionX, contactY, {maxWidth: contactSectionWidth});
+        doc.setDrawColor(lineColor[0], lineColor[1], lineColor[2]);
+        doc.line(contactSectionX + 20, contactY - 1, contactSectionX + 70, contactY -1); // Signature line
+    }
+    contactY += fieldSpacing;
+
+    // Contact Details with Text "Icons"
+    doc.text(`[WPP] ${fichaData.contatoEletricista}`, contactSectionX, contactY, {maxWidth: contactSectionWidth});
+    contactY += 5;
+    
+    // Social Media Placeholders (if company name exists)
+    if (fichaData.nomeEmpresa) {
+        // Assuming these would come from an enriched fichaData or a related company document
+        doc.text(`[Insta] @anode.lite (exemplo)`, contactSectionX, contactY, {maxWidth: contactSectionWidth});
+        contactY += 5;
+        doc.text(`[FB] /anode.lite (exemplo)`, contactSectionX, contactY, {maxWidth: contactSectionWidth});
+        contactY += 5;
+    }
+
+
+    // --- Section 6: Portaria (If present) ---
+    yPos = Math.max(yPos + qrSize + 10, contactY + 5); // Position below the taller of QR or Contact block
+    checkPageBreak(20);
+
+    if (fichaData.ramalPortaria) {
+      doc.setDrawColor(lineColor[0], lineColor[1], lineColor[2]);
+      doc.setLineWidth(0.3);
+      doc.line(margin, yPos, pageWidth - margin, yPos); // Horizontal line
+      yPos += 5;
+      
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(fontSizeBody);
+      doc.text("Portaria / Zeladoria:", margin, yPos);
+      doc.setFont(undefined, 'normal');
+      doc.text(fichaData.ramalPortaria, margin + 45, yPos);
+      yPos += 7;
+    }
+
+
+    // --- Section 7: Footer ---
+    // Position footer at the bottom of the last page
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(fontSizeSmall - 1);
+        doc.setTextColor(textColorDark[0], textColorDark[1], textColorDark[2]);
+        
+        const footerText = `Ficha técnica gerada por ANODE Lite - ${format(fichaData.dataCriacao?.toDate() || new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`;
+        const footerTextWidth = doc.getStringUnitWidth(footerText) * (fontSizeSmall -1) / doc.internal.scaleFactor;
+        doc.text(footerText, (pageWidth - footerTextWidth) / 2, pageHeight - margin / 2);
+        
+        const pageNumText = `Página ${i} de ${totalPages}`;
+        doc.text(pageNumText, pageWidth - margin - (doc.getStringUnitWidth(pageNumText) * (fontSizeSmall -1) / doc.internal.scaleFactor) , pageHeight - margin/2);
+    }
+
+
+    // --- Save PDF ---
+    const safeFileName = (fichaData.identificacaoLocal || "ficha_tecnica")
+      .replace(/[^a-z0-9_.\-\s]/gi, '_') // Replace non-alphanumeric (except some safe chars) with underscore
+      .replace(/\s+/g, '_') // Replace spaces with underscore
+      .toLowerCase();
+    doc.save(`ficha-tecnica_${safeFileName}.pdf`);
 
   } catch (error) {
       console.error("Erro ao gerar PDF:", error);
-      throw new Error("Não foi possível gerar o arquivo PDF.");
+      // Consider using a toast notification for the user here if this util is used directly in a component
+      throw new Error("Não foi possível gerar o arquivo PDF. Verifique o console para detalhes.");
   }
 }
+
+// Helper function to draw a rounded rectangle (if needed, jsPDF doesn't have it built-in easily)
+// function roundedRect(doc: jsPDF, x: number, y: number, w: number, h: number, r: number, style: 'F' | 'S' | 'DF') {
+//   doc.roundedRect(x, y, w, h, r, r, style); // jsPDF has roundedRect
+// }
