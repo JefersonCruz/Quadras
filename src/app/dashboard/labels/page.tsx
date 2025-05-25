@@ -5,7 +5,7 @@ import type { Etiqueta, Cliente, Projeto } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Tag, Lightbulb, PlugZap, Monitor, ShowerHead, WashingMachine, Bath, HelpCircle } from "lucide-react";
+import { Loader2, Tag, Lightbulb, PlugZap, Monitor, ShowerHead, WashingMachine, Bath, HelpCircle, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,13 +36,16 @@ export default function LabelsPage() {
   const [filteredProjects, setFilteredProjects] = useState<Projeto[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [suggestedCircuitId, setSuggestedCircuitId] = useState<string | null>(null);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-  const { control, handleSubmit, reset, watch, formState: { errors } } = useForm<LabelFormData>({
+  const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<LabelFormData>({
     resolver: zodResolver(labelSchema),
     defaultValues: { clienteId: "", projetoId: "", tipo: "", circuito: "", posicao: "" },
   });
 
   const selectedClientId = watch("clienteId");
+  const selectedProjectId = watch("projetoId");
   const watchedTipo = watch("tipo");
   const watchedCircuito = watch("circuito");
 
@@ -79,9 +82,48 @@ export default function LabelsPage() {
     }
     const currentProjectId = watch("projetoId");
     if (currentProjectId && !projects.find(p => p.id === currentProjectId && p.clienteId === selectedClientId)) {
-        reset(prev => ({...prev, projectId: ""}));
+        setValue("projetoId", "", { shouldValidate: true });
     }
-  }, [selectedClientId, projects, watch, reset]);
+  }, [selectedClientId, projects, watch, setValue]);
+
+  useEffect(() => {
+    const fetchAndSuggestCircuitId = async () => {
+      if (!selectedProjectId || !user) {
+        setSuggestedCircuitId(null);
+        return;
+      }
+      setLoadingSuggestions(true);
+      try {
+        const q = query(
+          collection(db, "etiquetas"),
+          where("owner", "==", user.uid),
+          where("projetoId", "==", selectedProjectId)
+        );
+        const querySnapshot = await getDocs(q);
+        const existingLabels = querySnapshot.docs.map(doc => doc.data() as Etiqueta);
+        
+        let maxCNumber = 0;
+        existingLabels.forEach(label => {
+          const match = label.circuito?.match(/^C(\d+)$/i);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (num > maxCNumber) {
+              maxCNumber = num;
+            }
+          }
+        });
+        setSuggestedCircuitId(`C${maxCNumber + 1}`);
+      } catch (error) {
+        console.error("Error fetching labels for suggestion:", error);
+        setSuggestedCircuitId(null); // Or "Erro"
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    };
+
+    fetchAndSuggestCircuitId();
+  }, [selectedProjectId, user]);
+
 
   const onSubmit = async (data: LabelFormData) => {
     if (!user) return;
@@ -93,7 +135,12 @@ export default function LabelsPage() {
       };
       await addDoc(collection(db, "etiquetas"), labelData);
       toast({ title: "Etiqueta criada!", description: "A nova etiqueta foi salva com sucesso." });
-      reset(); 
+      reset({ clienteId: data.clienteId, projetoId: data.projetoId, tipo: "", circuito: "", posicao: "" }); // Keep client/project
+      // Trigger re-fetch of suggestions for the next label
+      const event = new Event('change', { bubbles: true });
+      document.getElementById('projetoId')?.dispatchEvent(event);
+
+
     } catch (error) {
       toast({ title: "Erro ao criar etiqueta", description: "Não foi possível salvar a etiqueta.", variant: "destructive" });
     } finally {
@@ -103,18 +150,21 @@ export default function LabelsPage() {
 
   const getPreviewIcon = (tipo: string) => {
     const tipoLower = tipo.toLowerCase();
+    if (tipoLower.includes("idr")) return <ShieldAlert className="h-7 w-7 mr-2 shrink-0 text-yellow-500" />;
+    if (tipoLower.includes("dps")) return <ShieldCheck className="h-7 w-7 mr-2 shrink-0 text-green-500" />;
     if (tipoLower.includes("ilumina")) return <Lightbulb className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("tomada")) return <PlugZap className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("computador") || tipoLower.includes("pc")) return <Monitor className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("chuveiro")) return <ShowerHead className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("lavanderia") || tipoLower.includes("máquina de lavar") || tipoLower.includes("lava roupa")) return <WashingMachine className="h-7 w-7 mr-2 shrink-0" />;
-    if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return <HelpCircle className="h-7 w-7 mr-2 shrink-0 text-muted-foreground" />; // Oven fallback
+    if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return <HelpCircle className="h-7 w-7 mr-2 shrink-0 text-muted-foreground" />;
     if (tipoLower.includes("banheiro") || tipoLower.includes("banheira")) return <Bath className="h-7 w-7 mr-2 shrink-0" />;
     return <HelpCircle className="h-7 w-7 mr-2 shrink-0 text-muted-foreground" />;
   };
 
   const getPreviewDisjuntor = (tipo: string): string => {
     const tipoLower = tipo.toLowerCase();
+    if (tipoLower.includes("idr") || tipoLower.includes("dps")) return "PROTEÇÃO";
     if (tipoLower.includes("chuveiro")) return "40A";
     if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return "25A";
     if (tipoLower.includes("ilumina")) return "10A";
@@ -127,6 +177,18 @@ export default function LabelsPage() {
   const previewCircuitId = watchedCircuito ? (watchedCircuito.trim().split(/[\s-/]/)[0] || "CX").toUpperCase() : "CX";
   const previewTipoText = watchedTipo || "TIPO ETIQUETA";
   const previewDisjuntorText = `DISJUNTOR ${getPreviewDisjuntor(watchedTipo || "")}`;
+
+  const suggestIDR = () => {
+    setValue("tipo", "IDR Geral", { shouldValidate: true });
+    setValue("circuito", "IDR", { shouldValidate: true });
+    setValue("posicao", "Quadro de Distribuição Principal", { shouldValidate: true });
+  };
+
+  const suggestDPS = () => {
+    setValue("tipo", "DPS Geral", { shouldValidate: true });
+    setValue("circuito", "DPS", { shouldValidate: true });
+    setValue("posicao", "Entrada Geral / QDG", { shouldValidate: true });
+  };
 
 
   return (
@@ -174,7 +236,7 @@ export default function LabelsPage() {
                   render={({ field }) => (
                     <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClientId || filteredProjects.length === 0}>
                       <SelectTrigger id="projetoId">
-                        <SelectValue placeholder={!selectedClientId ? "Selecione um cliente primeiro" : "Selecione um projeto"} />
+                        <SelectValue placeholder={!selectedClientId ? "Selecione um cliente primeiro" : (filteredProjects.length === 0 ? "Nenhum projeto para este cliente" : "Selecione um projeto")} />
                       </SelectTrigger>
                       <SelectContent>
                         {filteredProjects.map(project => (
@@ -192,7 +254,7 @@ export default function LabelsPage() {
                 <Controller
                   name="tipo"
                   control={control}
-                  render={({ field }) => <Input id="tipo" {...field} placeholder="Ex: Iluminação Cozinha, Tomada Sala" />}
+                  render={({ field }) => <Input id="tipo" {...field} placeholder="Ex: Iluminação Cozinha, Tomada Sala, IDR Geral" />}
                 />
                 {errors.tipo && <p className="text-sm text-destructive mt-1">{errors.tipo.message}</p>}
               </div>
@@ -202,9 +264,17 @@ export default function LabelsPage() {
                 <Controller
                   name="circuito"
                   control={control}
-                  render={({ field }) => <Input id="circuito" {...field} placeholder="Ex: C1, C2A, QDC-01.C3" />}
+                  render={({ field }) => <Input id="circuito" {...field} placeholder="Ex: C1, C2A, IDR, DPS" />}
                 />
                 {errors.circuito && <p className="text-sm text-destructive mt-1">{errors.circuito.message}</p>}
+                {loadingSuggestions && <p className="text-xs text-muted-foreground mt-1">Buscando sugestão de ID...</p>}
+                {!loadingSuggestions && suggestedCircuitId && selectedProjectId && (
+                  <div className="mt-1 text-xs">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setValue('circuito', suggestedCircuitId, {shouldValidate: true})}>
+                      Usar Sugestão: {suggestedCircuitId}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -212,12 +282,17 @@ export default function LabelsPage() {
                 <Controller
                   name="posicao"
                   control={control}
-                  render={({ field }) => <Input id="posicao" {...field} placeholder="Ex: TUG Cozinha Bancada, Luminária Central Quarto" />}
+                  render={({ field }) => <Input id="posicao" {...field} placeholder="Ex: TUG Cozinha Bancada, QDC Principal" />}
                 />
                 {errors.posicao && <p className="text-sm text-destructive mt-1">{errors.posicao.message}</p>}
               </div>
+              
+              <div className="flex gap-2 pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={suggestIDR} disabled={!selectedProjectId}>Sugerir Etiqueta IDR</Button>
+                <Button type="button" variant="outline" size="sm" onClick={suggestDPS} disabled={!selectedProjectId}>Sugerir Etiqueta DPS</Button>
+              </div>
 
-              <Button type="submit" disabled={loading} className="w-full">
+              <Button type="submit" disabled={loading || !selectedProjectId} className="w-full">
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Tag className="mr-2 h-4 w-4" />} Criar Etiqueta
               </Button>
             </form>
@@ -254,9 +329,10 @@ export default function LabelsPage() {
                     <CardTitle>Dicas</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
-                    <p>• **Tipo da Etiqueta:** Seja descritivo (Ex: "Tomada Dupla Bancada", "Luminária LED Corredor").</p>
-                    <p>• **Circuito (ID):** Use o identificador único do circuito (Ex: "C1", "A2.1").</p>
-                    <p>• **Posição:** Detalhe a localização exata (Ex: "Parede Leste, ao lado da Porta").</p>
+                    <p>• **Selecione Cliente e Projeto** primeiro para habilitar sugestões e criação.</p>
+                    <p>• **Tipo da Etiqueta:** Seja descritivo (Ex: "Tomada Dupla Bancada", "IDR Geral").</p>
+                    <p>• **Circuito (ID):** Use o identificador único (Ex: "C1", "A2.1", "IDR", "DPS") ou use a sugestão.</p>
+                    <p>• **Posição:** Detalhe a localização (Ex: "Parede Leste, ao lado da Porta", "QDC Garagem").</p>
                 </CardContent>
             </Card>
         </div>
