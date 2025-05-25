@@ -1,0 +1,84 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Assumes custom claim 'role' is set on the user's token by a backend process (e.g., Firebase Function)
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.role == "admin";
+    }
+
+    function isOwner(docOwnerId) {
+      return isSignedIn() && request.auth.uid == docOwnerId;
+    }
+
+    // User profile data
+    match /usuarios/{userId} {
+      allow read, update, delete: if isOwner(userId);
+      allow create: if isSignedIn() && request.resource.data.email == request.auth.token.email; // Allow user to create their own profile
+    }
+
+    // Company profile data
+    match /empresas/{empresaId} {
+      // Assuming empresaId might be userId or a unique ID.
+      // If empresaId is userId:
+      // allow read, write: if isOwner(empresaId);
+      // If empresaId is unique and 'owner' field exists:
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.owner == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.owner == request.auth.uid;
+    }
+
+    // Client data
+    match /clientes/{clienteId} {
+      allow read, update, delete: if isSignedIn() && resource.data.owner == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.owner == request.auth.uid;
+    }
+
+    // Project data
+    match /projetos/{projetoId} {
+      allow read, update, delete: if isSignedIn() && resource.data.owner == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.owner == request.auth.uid;
+    }
+
+    // Label data
+    match /etiquetas/{etiquetaId} {
+      allow read, update, delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+    }
+
+    // Technical Sheet data
+    match /fichasTecnicas/{fichaId} {
+      allow read, update, delete: if isSignedIn() && resource.data.owner == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.owner == request.auth.uid;
+    }
+
+    // Publicly readable technical sheets (e.g., by client ID)
+    // This structure implies fichasPublicas documents have a field linking them to a client if the path is /fichasPublicas/{someDocId}
+    // If the path is /fichasPublicas/{clienteId} then it is a document *named* after the clientID. This is less common for collections of items.
+    // Assuming /fichasPublicas/{publicFichaId} and document has a `clienteId` field.
+    match /fichasPublicas/{publicFichaId} {
+      allow read: if true; // Publicly readable
+      // Write rules depend on how these are created.
+      // If users create them for their clients:
+      allow create, update, delete: if isSignedIn(); // Or more specific: if user owns the related client/project
+    }
+
+    // Report data
+    match /relatorios/{relatorioId} {
+      allow read, update, delete: if isSignedIn() && resource.data.owner == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.owner == request.auth.uid;
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

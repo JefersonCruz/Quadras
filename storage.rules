@@ -1,0 +1,41 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    functionisSignedIn() {
+      return request.auth != null;
+    }
+
+    // Allow users to read and write to their own folder e.g. /users/{userId}/...
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Company logos: allow owner to write, public read
+    match /empresas/{empresaId}/logotipo/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && exists(/databases/$(database)/documents/empresas/$(empresaId)) &&
+                   getDocument(/databases/$(database)/documents/empresas/$(empresaId)).data.owner == request.auth.uid;
+    }
+    
+    // PDF Urls for Fichas Tecnicas: allow owner to write, potentially restricted read
+    match /fichasTecnicas/{userId}/{fichaId}/{fileName} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+       // To allow public read if pdfUrl is public: allow read: if true;
+       // Or specific conditions: e.g., if resource.metadata.public == 'true'
+    }
+
+    // QR Codes for Etiquetas: allow creator to write, potentially public read
+    match /etiquetas/{userId}/{etiquetaId}/qrCode/{fileName} {
+       allow read: if true; // QR codes often need to be publicly scannable
+       allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
