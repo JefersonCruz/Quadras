@@ -5,7 +5,7 @@ import type { Etiqueta, Cliente, Projeto } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Tag, Lightbulb, PlugZap, Monitor, ShowerHead, WashingMachine, Oven, Bath, HelpCircle } from "lucide-react";
+import { Loader2, Tag, Lightbulb, PlugZap, Monitor, ShowerHead, WashingMachine, Bath, HelpCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -79,7 +79,7 @@ export default function LabelsPage() {
     }
     const currentProjectId = watch("projetoId");
     if (currentProjectId && !projects.find(p => p.id === currentProjectId && p.clienteId === selectedClientId)) {
-        reset(prev => ({...prev, projetoId: ""}));
+        reset(prev => ({...prev, projectId: ""}));
     }
   }, [selectedClientId, projects, watch, reset]);
 
@@ -108,7 +108,7 @@ export default function LabelsPage() {
     if (tipoLower.includes("computador") || tipoLower.includes("pc")) return <Monitor className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("chuveiro")) return <ShowerHead className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("lavanderia") || tipoLower.includes("máquina de lavar") || tipoLower.includes("lava roupa")) return <WashingMachine className="h-7 w-7 mr-2 shrink-0" />;
-    if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return <Oven className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return <HelpCircle className="h-7 w-7 mr-2 shrink-0 text-muted-foreground" />; // Oven fallback
     if (tipoLower.includes("banheiro") || tipoLower.includes("banheira")) return <Bath className="h-7 w-7 mr-2 shrink-0" />;
     return <HelpCircle className="h-7 w-7 mr-2 shrink-0 text-muted-foreground" />;
   };
@@ -116,13 +116,12 @@ export default function LabelsPage() {
   const getPreviewDisjuntor = (tipo: string): string => {
     const tipoLower = tipo.toLowerCase();
     if (tipoLower.includes("chuveiro")) return "40A";
-    if (tipoLower.includes("forno") || tipoLower.includes("cooktop")) return "25A";
+    if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return "25A";
     if (tipoLower.includes("ilumina")) return "10A";
-    if (tipoLower.includes("lavanderia") || tipoLower.includes("torneira")) return "16A";
-    if (tipoLower.includes("banheiro") && !tipoLower.includes("chuveiro")) return "20A"; // General bathroom, not shower
-    // Default for tomada, computador, etc.
+    if (tipoLower.includes("lavanderia")) return "16A";
+    if (tipoLower.includes("banheiro") && !tipoLower.includes("chuveiro")) return "20A";
     if (tipoLower.includes("tomada") || tipoLower.includes("computador")) return "20A";
-    return "XX A"; // Default placeholder
+    return "XX A";
   };
   
   const previewCircuitId = watchedCircuito ? (watchedCircuito.trim().split(/[\s-/]/)[0] || "CX").toUpperCase() : "CX";
@@ -266,3 +265,4 @@ export default function LabelsPage() {
   );
 }
 
+    
