@@ -99,6 +99,7 @@ export interface Usuario {
   email: string;
   nome?: string;
   role?: 'user' | 'admin';
+  tipoPlano?: "gratuito" | "premium"; // Added tipoPlano
   // empresaId?: string; // If user is directly linked to one empresa
 }
 

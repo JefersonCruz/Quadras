@@ -60,6 +60,7 @@ export default function SignupForm() {
         email: user.email!,
         nome: values.name,
         role: 'user', // Default role
+        tipoPlano: "gratuito", // Default plan
       };
       await setDoc(doc(db, "usuarios", user.uid), userDocData);
 
