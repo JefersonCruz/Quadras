@@ -87,7 +87,6 @@ export default function CompanyProfilePage() {
       if (docSnap.exists()) {
         const data = docSnap.data() as Empresa;
         setCompanyData(data);
-        // Ensure all optional fields default to "" if null or undefined
         reset({
           nome: data.nome || "",
           cnpj: data.cnpj || "",
@@ -98,11 +97,11 @@ export default function CompanyProfilePage() {
           instagram: data.instagram || "",
           facebook: data.facebook || "",
           whatsapp: data.whatsapp || "",
-          logotipoFile: undefined, // Reset file input
+          logotipoFile: undefined, 
         });
         if (data.logotipo) setLogoPreview(data.logotipo);
       } else {
-         reset({ // Ensure defaults are set even if no company data exists
+         reset({ 
           nome: "",
           cnpj: "",
           email: user.email || "",
@@ -120,7 +119,7 @@ export default function CompanyProfilePage() {
     } finally {
       setLoadingData(false);
     }
-  }, [user, reset, toast, setValue]); // Removed setValue from here as reset handles it
+  }, [user, reset, toast]);
 
   useEffect(() => {
     fetchCompanyData();
@@ -188,7 +187,7 @@ export default function CompanyProfilePage() {
         const snapshot = await uploadBytes(storageRef, file);
         logoUrl = await getDownloadURL(snapshot.ref);
       } catch (error) {
-        console.error("Firebase Storage Error:", error); // Log the actual error
+        console.error("Firebase Storage Error:", error); 
         toast({ title: "Erro no upload do logotipo", description: "Não foi possível salvar o logotipo. Verifique o console para detalhes.", variant: "destructive" });
         setLoading(false);
         return;
@@ -305,7 +304,7 @@ export default function CompanyProfilePage() {
                   <Input 
                     id="logotipoFile" 
                     type="file" 
-                    accept="image/png, image/jpeg, image/webp, image/gif" // Define accepted file types
+                    accept="image/png, image/jpeg, image/webp, image/gif" 
                     onChange={(e) => onChange(e.target.files)} 
                     {...restField} 
                     className="mt-1"
