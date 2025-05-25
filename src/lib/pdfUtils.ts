@@ -2,126 +2,211 @@
 // src/lib/pdfUtils.ts
 'use client';
 
-import type { FichaTecnica, Empresa } from "@/types/firestore";
+import type { FichaTecnica } from "@/types/firestore";
 import jsPDF from "jspdf";
+import autoTable from 'jspdf-autotable';
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+// Extend jsPDF with autoTable - this is how the plugin is typically used
+interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: any) => jsPDF;
+}
+
 export async function generateTechnicalSheetPdf(fichaData: FichaTecnica): Promise<void> {
   try {
-    const doc = new jsPDF();
-    let yPos = 20;
-    const lineSpacing = 7;
-    const sectionSpacing = 10;
-    const indent = 10;
-    const fieldIndent = indent + 5;
+    const doc = new jsPDF() as jsPDFWithAutoTable;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    let yPos = 0;
 
-    // --- Helper to add text and increment yPos ---
-    const addText = (text: string, x: number, y: number, options?: any) => {
-      doc.text(text, x, y, options);
-      return y + lineSpacing;
-    };
+    const margin = 10;
+    const contentWidth = pageWidth - 2 * margin;
 
-    const addTitle = (text: string, x: number, y: number) => {
-      doc.setFontSize(14);
-      doc.setFont(undefined, 'bold');
-      const newY = addText(text, x, y);
-      doc.setFontSize(10);
-      doc.setFont(undefined, 'normal');
-      return newY;
-    };
+    // Colors (approximations)
+    const headerBlue = [25, 75, 125]; // RGB for dark blue
+    const textDark = [51, 51, 51]; // Dark grey for text
+    const textLight = [255, 255, 255]; // White
+    const accentOrange = [255, 152, 0]; // Orange for lightning bolt
 
-    // --- SEÇÃO 1: Cabeçalho e Identificação ---
-    yPos = addTitle("1. Cabeçalho e Identificação", indent, yPos);
+    // --- SEÇÃO 1: Cabeçalho Principal (Azul) ---
+    const headerHeight = 40;
+    doc.setFillColor(headerBlue[0], headerBlue[1], headerBlue[2]);
+    doc.rect(0, 0, pageWidth, headerHeight, 'F');
+    yPos = 15; // Start text within the blue header
+
+    // Placeholder for Lightning Bolt Icon (using a simple shape or text)
+    doc.setFillColor(accentOrange[0], accentOrange[1], accentOrange[2]);
+    doc.circle(pageWidth / 2, yPos, 5, 'F'); // Simple circle
+    doc.setFontSize(18);
+    doc.setTextColor(textLight[0], textLight[1], textLight[2]);
+    doc.setFont(undefined, 'bold');
+    // Simulating the text "ENERGY"
+    const energyText = "ENERGY";
+    const energyTextWidth = doc.getStringUnitWidth(energyText) * 18 / doc.internal.scaleFactor;
+    doc.text(energyText, (pageWidth - energyTextWidth) / 2, yPos + 15);
+
+    yPos = headerHeight + 10; // Position after blue header
+
+    // --- SEÇÃO 2: Identificação da Ficha ---
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    const tituloFichaText = fichaData.tituloFicha || "FICHA TÉCNICA – QUADRO DE DISTRIBUIÇÃO";
+    const tituloWidth = doc.getStringUnitWidth(tituloFichaText) * 16 / doc.internal.scaleFactor;
+    doc.text(tituloFichaText, (pageWidth - tituloWidth) / 2, yPos);
+    yPos += 8;
+
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    yPos = doc.getTextDimensions(fichaData.identificacaoLocal, { fontSize: 10, maxWidth: contentWidth }).h > 5 ? yPos + 5 : yPos;
+    doc.text(`Local: ${fichaData.identificacaoLocal}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Data: ${fichaData.dataInstalacao ? format(fichaData.dataInstalacao.toDate(), "dd/MM/yyyy", { locale: ptBR }) : 'N/A'}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Responsável: ${fichaData.responsavelTecnico}`, margin, yPos);
+    yPos += 5;
+
+    // Placeholder for small "ENERGY" logo (text based)
     if (fichaData.logotipoEmpresaUrl) {
-      // Placeholder for actual image rendering, which is more complex with jsPDF
-      // For now, we'll just note the URL. In a real scenario, you might fetch and draw it.
-      try {
-        // This is a very basic attempt, real image embedding is more involved
-        // const imgData = await fetch(fichaData.logotipoEmpresaUrl).then(res => res.blob()).then(blob => URL.createObjectURL(blob));
-        // doc.addImage(imgData, 'PNG', fieldIndent, yPos, 30, 30);
-        // yPos += 35;
-         yPos = addText(`Logotipo Empresa: ${fichaData.logotipoEmpresaUrl}`, fieldIndent, yPos);
-      } catch (e) {
-        yPos = addText(`Logotipo Empresa (URL): ${fichaData.logotipoEmpresaUrl}`, fieldIndent, yPos);
+        // In a real scenario, you'd fetch and draw the image. For now, text placeholder.
+        doc.setFontSize(8);
+        doc.text(`Logo: ${fichaData.nomeEmpresa || "Empresa"}`, pageWidth - margin - 40, yPos - 10, { align: 'right' });
+    } else if(fichaData.nomeEmpresa) {
+        doc.setFontSize(8);
+        doc.text(fichaData.nomeEmpresa, pageWidth - margin - 40, yPos - 10, { align: 'right' });
+    }
+
+
+    yPos += 5; // Space before table
+    doc.setFontSize(10);
+
+
+    // --- SEÇÃO 3: Tabela de Distribuição dos Circuitos ---
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text("Distribuição dos Circuitos", margin, yPos);
+    yPos += 6;
+
+    const tableColumnStyles = {
+      0: { cellWidth: 15 }, // Nº
+      1: { cellWidth: 50 }, // Circuito
+      2: { cellWidth: 35 }, // Disjuntor
+      3: { cellWidth: 30 }, // Cabo
+      4: { cellWidth: 'auto' },// Observações
+    };
+
+    const tableData = fichaData.circuitos.map((circ, index) => [
+      (index + 1).toString(),
+      circ.nome,
+      circ.disjuntor,
+      circ.caboMM,
+      circ.observacoes || "-",
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Nº', 'Circuito', 'Disjuntor', 'Cabo (mm²)', 'Observações']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [220, 220, 220], textColor: textDark, fontStyle: 'bold', fontSize:9 },
+      bodyStyles: { textColor: textDark, fontSize: 8, cellPadding: 1.5 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      columnStyles: tableColumnStyles,
+      margin: { left: margin, right: margin },
+      didDrawPage: (data) => { // Capture yPos after table
+        yPos = data.cursor?.y || yPos;
       }
-    }
-    yPos = addText(`Nome Empresa: ${fichaData.nomeEmpresa || "Não configurado"}`, fieldIndent, yPos);
-    yPos = addText(`Título da Ficha: ${fichaData.tituloFicha}`, fieldIndent, yPos);
-    yPos = addText(`Local/Identificação: ${fichaData.identificacaoLocal}`, fieldIndent, yPos);
-    yPos = addText(`Data da Instalação: ${fichaData.dataInstalacao ? format(fichaData.dataInstalacao.toDate(), "dd/MM/yyyy", { locale: ptBR }) : 'N/A'}`, fieldIndent, yPos);
-    yPos = addText(`Responsável Técnico: ${fichaData.responsavelTecnico}`, fieldIndent, yPos);
-    yPos = addText(`Versão da Ficha: ${fichaData.versaoFicha}`, fieldIndent, yPos);
-    yPos += sectionSpacing;
+    });
+    // yPos is updated by autoTable's didDrawPage hook or its finalY property
+    yPos = (doc as any).lastAutoTable.finalY ? (doc as any).lastAutoTable.finalY + 5 : yPos + 10;
 
-    // --- SEÇÃO 2: Tabela de Distribuição dos Circuitos ---
-    if (yPos > 240) { doc.addPage(); yPos = 20; }
-    yPos = addTitle("2. Distribuição dos Circuitos", indent, yPos);
-    if (fichaData.circuitos && fichaData.circuitos.length > 0) {
-      doc.setFont(undefined, 'bold');
-      yPos = addText("N° | Circuito | Disjuntor | Cabo (mm²) | Observações", fieldIndent, yPos);
-      doc.setFont(undefined, 'normal');
-      fichaData.circuitos.forEach((circ, index) => {
-        const circuitoText = `${index + 1} | ${circ.nome} | ${circ.disjuntor} | ${circ.caboMM} | ${circ.observacoes || "-"}`;
-        yPos = addText(circuitoText, fieldIndent, yPos);
-        if (yPos > 270) { // Page break logic
-          doc.addPage();
-          yPos = 20;
-          // Optional: Repeat table headers on new page
-          doc.setFont(undefined, 'bold');
-          addText("N° | Circuito | Disjuntor | Cabo (mm²) | Observações", fieldIndent, yPos);
-          yPos += lineSpacing;
-          doc.setFont(undefined, 'normal');
-        }
-      });
-    } else {
-      yPos = addText("Nenhum circuito adicionado.", fieldIndent, yPos);
-    }
-    yPos += sectionSpacing;
 
-    // --- SEÇÃO 3: Observações Técnicas ---
-    if (yPos > 250) { doc.addPage(); yPos = 20; }
-    yPos = addTitle("3. Observações Técnicas", indent, yPos);
-    yPos = addText(`Norma de Referência: ${fichaData.observacaoNBR || "Conforme NBR 5410"}`, fieldIndent, yPos);
-    yPos = addText(`Disjuntor DR: ${fichaData.observacaoDR ? "Sim" : "Não"}`, fieldIndent, yPos);
-    if (fichaData.descricaoDROpcional) {
-      yPos = addText(`Descrição DR: ${fichaData.descricaoDROpcional}`, fieldIndent, yPos);
+    // --- SEÇÃO 4: Observações Técnicas ---
+    if (yPos > pageHeight - 60) { doc.addPage(); yPos = margin; } // Check for page break
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Conforme NBR 5410`, margin, yPos);
+    yPos += 5;
+    let obsDRText = `Observações: Disjuntor DR ${fichaData.observacaoDR ? 'instalado' : 'não instalado'}.`;
+    if (fichaData.observacaoDR && fichaData.descricaoDROpcional) {
+      obsDRText += ` ${fichaData.descricaoDROpcional}`;
+    } else if (!fichaData.observacaoDR && fichaData.descricaoDROpcional) {
+       obsDRText += ` ${fichaData.descricaoDROpcional}`;
     }
-    yPos += sectionSpacing;
-    
-    // --- SEÇÃO 4: QR Code e Acesso ---
-    if (yPos > 260) { doc.addPage(); yPos = 20; }
-    yPos = addTitle("4. QR Code e Acesso", indent, yPos);
-    if (fichaData.qrCodeUrl) {
-        // Placeholder for actual QR image
-         yPos = addText(`QR Code: ${fichaData.qrCodeUrl}`, fieldIndent, yPos);
-    } else {
-         yPos = addText("QR Code da Ficha: (Não gerado/configurado)", fieldIndent, yPos);
-    }
-    yPos = addText(`Texto de Acesso Online: ${fichaData.textoAcessoOnline || "Acesso aos projetos online"}`, fieldIndent, yPos);
-    if (fichaData.linkFichaPublica) {
-         yPos = addText(`Link da Ficha Técnica: ${fichaData.linkFichaPublica}`, fieldIndent, yPos);
-    } else {
-         yPos = addText("Link da Ficha Técnica: (Não gerado/configurado)", fieldIndent, yPos);
-    }
-    yPos += sectionSpacing;
+    doc.text(obsDRText, margin, yPos, {maxWidth: contentWidth});
+    yPos += doc.getTextDimensions(obsDRText, { fontSize: 10, maxWidth: contentWidth }).h + 2;
 
-    // --- SEÇÃO 5: Assinatura e Contato ---
-    if (yPos > 240) { doc.addPage(); yPos = 20; }
-    yPos = addTitle("5. Assinatura e Contato", indent, yPos);
-    yPos = addText(`Nome Eletricista/Responsável: ${fichaData.nomeEletricista}`, fieldIndent, yPos);
+
+    doc.text(`Acesso aos projetos online`, margin, yPos);
+    yPos += 8;
+
+    // --- SEÇÃO 5: QR Code e Contato ---
+    if (yPos > pageHeight - 50) { doc.addPage(); yPos = margin; }
+    const qrSectionX = margin;
+    const contactSectionX = pageWidth / 2 + 5;
+    const qrSize = 25;
+
+    // Placeholder for QR Code
+    doc.setFillColor(230, 230, 230);
+    doc.rect(qrSectionX, yPos, qrSize, qrSize, 'F');
+    doc.setFontSize(8);
+    doc.text("QR", qrSectionX + qrSize/2, yPos + qrSize/2, {align: 'center', baseline: 'middle'});
+
+    doc.setFontSize(9);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    const qrTextX = qrSectionX + qrSize + 5;
+    let qrTextY = yPos + 5;
+    doc.text("→ Informação completa", qrTextX, qrTextY);
+    qrTextY += 5;
+    doc.text(fichaData.linkFichaPublica || "www.exemplo.com", qrTextX, qrTextY, {
+        // Uncomment to make it a clickable link if a valid URL is present
+        // ...(fichaData.linkFichaPublica && {link: {url: fichaData.linkFichaPublica, options: {pageNumber: 1}}})
+    });
+
+    // Contato e Assinatura
+    const signatureYStart = yPos;
+    doc.setFontSize(10);
+    doc.text(fichaData.nomeEletricista, contactSectionX, signatureYStart + 5, {maxWidth: contentWidth/2 -10});
+    doc.setFontSize(8);
+    doc.text("Eng. Eletricista", contactSectionX, signatureYStart + 9); // Role underneath
     if (fichaData.assinaturaEletricistaUrl) {
-      // Placeholder for actual image
-      yPos = addText(`Assinatura Digital (URL): ${fichaData.assinaturaEletricistaUrl}`, fieldIndent, yPos);
+        doc.text(`Assinatura: (ver URL)`, contactSectionX, signatureYStart + 15, {maxWidth: contentWidth/2 -10});
     } else {
-       yPos = addText(`Assinatura Digital: (Não fornecida)`, fieldIndent, yPos);
+        // Placeholder for signature line
+        doc.line(contactSectionX, signatureYStart + 13, contactSectionX + 40, signatureYStart + 13);
     }
-    yPos = addText(`Contato: ${fichaData.contatoEletricista}`, fieldIndent, yPos);
-    if (fichaData.ramalPortaria) {
-      yPos = addText(`Ramal Portaria: ${fichaData.ramalPortaria}`, fieldIndent, yPos);
-    }
-    
-    doc.save(`ficha-tecnica-${fichaData.identificacaoLocal.replace(/\s+/g, '_') || 'geral'}.pdf`);
+
+    // Placeholder for WhatsApp icon
+    doc.setFillColor(37, 211, 102); // WhatsApp Green
+    doc.circle(contactSectionX -1, signatureYStart + 20, 1.5, 'F'); // Small circle for icon placeholder
+    doc.text(fichaData.contatoEletricista, contactSectionX + 3, signatureYStart + 21);
+
+
+    // --- SEÇÃO 6: Portaria ---
+    yPos = Math.max(yPos + qrSize, signatureYStart + 25) + 10; // Position below QR and Signature
+    if (yPos > pageHeight - 20) { doc.addPage(); yPos = margin; }
+    doc.setDrawColor(150,150,150); // Light grey for lines
+    doc.line(margin, yPos, pageWidth - margin, yPos); // Horizontal line
+    yPos +=5;
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text("Portaria", margin, yPos);
+    doc.setFont(undefined, 'normal');
+    doc.text(fichaData.ramalPortaria || "-", margin + 25, yPos);
+    doc.line(margin, yPos+2, pageWidth - margin, yPos+2); // Horizontal line
+    yPos += 7;
+
+
+    // --- SEÇÃO 7: Rodapé ---
+    if (yPos > pageHeight - 15) { doc.addPage(); yPos = margin; }
+    doc.setFontSize(8);
+    const footerText = `Ficha técnica atualizada em ${format(fichaData.dataCriacao?.toDate() || new Date(), "dd/MM/yyyy", { locale: ptBR })}`;
+    const footerTextWidth = doc.getStringUnitWidth(footerText) * 8 / doc.internal.scaleFactor;
+    doc.text(footerText, (pageWidth - footerTextWidth) / 2, pageHeight - margin + 5); // Centered at bottom
+
+    doc.save(`ficha-tecnica-${fichaData.identificacaoLocal.replace(/\s+/g, '_').toLowerCase() || 'geral'}.pdf`);
+
   } catch (error) {
       console.error("Erro ao gerar PDF:", error);
       throw new Error("Não foi possível gerar o arquivo PDF.");
