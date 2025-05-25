@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
 import type { Contrato } from "@/types/firestore";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -36,11 +36,11 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // Function to copy text to clipboard
-const copyToClipboard = (text: string, toast: (options: any) => void) => {
+const copyToClipboard = (text: string, toastFn: (options: any) => void) => {
   navigator.clipboard.writeText(text).then(() => {
-    toast({ title: "Link Copiado!", description: "O link de assinatura foi copiado para a área de transferência." });
+    toastFn({ title: "Link Copiado!", description: "O link de assinatura foi copiado para a área de transferência." });
   }).catch(err => {
-    toast({ title: "Erro ao Copiar", description: "Não foi possível copiar o link.", variant: "destructive" });
+    toastFn({ title: "Erro ao Copiar", description: "Não foi possível copiar o link.", variant: "destructive" });
     console.error('Failed to copy text: ', err);
   });
 };
@@ -72,7 +72,6 @@ export default function ContractsPage() {
       setContracts(contractsData);
     } catch (error: any) {
       console.error("Erro ao buscar contratos:", error);
-      // Check for Firestore index missing error
       if (error.code === 'failed-precondition' && error.message.includes('index')) {
           toast({
             title: "Índice do Firestore Necessário",
@@ -86,7 +85,7 @@ export default function ContractsPage() {
               </div>
             ),
             variant: "destructive",
-            duration: 20000, // Longer duration for this important message
+            duration: 20000, 
           });
       } else {
         toast({ title: "Erro ao buscar contratos", description: "Não foi possível carregar a lista de contratos.", variant: "destructive" });
@@ -96,7 +95,6 @@ export default function ContractsPage() {
     }
   }, [user, toast]);
 
-  // Helper to extract Firebase index creation link from error message
   const extractFirebaseIndexLink = (errorMessage: string): string => {
     const match = errorMessage.match(/(https?:\/\/[^\s]+)/);
     return match ? match[0] : "https://console.firebase.google.com/";
@@ -123,12 +121,39 @@ export default function ContractsPage() {
     }
   };
   
-  const openShareDialog = (contract: Contrato) => {
-    setSelectedContractForSharing(contract);
+  const openShareDialog = async (contract: Contrato) => {
+    let contractToShare = contract;
+    if (contract.status === 'rascunho' && contract.id) {
+      try {
+        const contractRef = doc(db, "contratos", contract.id);
+        const newStatus = 'pendente_assinaturas';
+        const newSentDate = Timestamp.now();
+        await updateDoc(contractRef, {
+          status: newStatus,
+          dataEnvioAssinaturas: newSentDate
+        });
+        
+        contractToShare = { ...contract, status: newStatus, dataEnvioAssinaturas: newSentDate };
+        
+        setContracts(prevContracts =>
+          prevContracts.map(c =>
+            c.id === contract.id ? contractToShare : c
+          )
+        );
+        toast({ title: "Status Atualizado!", description: "Contrato agora está pendente de assinaturas." });
+      } catch (error) {
+        console.error("Erro ao atualizar status do contrato:", error);
+        toast({ title: "Erro ao Atualizar Status", description: "Não foi possível mudar o status para 'Pendente Assinaturas'.", variant: "destructive" });
+        // Decide if you want to proceed with sharing if status update fails. For now, we will.
+      }
+    }
+    setSelectedContractForSharing(contractToShare);
     setIsShareDialogOpen(true);
   };
 
   const getSignerLink = (contractId: string, signerType: 'client' | 'witness1' | 'witness2') => {
+    // In a real app, the prestador (provider) might sign via the platform itself, not a public link.
+    // For now, we generate links for client and witnesses.
     return `${APP_BASE_URL}/sign-contract/${contractId}/${signerType}`;
   };
 
@@ -209,7 +234,7 @@ export default function ContractsPage() {
                       </TableCell>
                       <TableCell>{contract.dataCriacao ? format(contract.dataCriacao.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        {(contract.status === 'rascunho' || contract.status === 'pendente_assinaturas') && (
+                        {(contract.status === 'rascunho' || contract.status === 'pendente_assinaturas' || contract.status === 'parcialmente_assinado') && (
                           <Button variant="outline" size="sm" onClick={() => openShareDialog(contract)}>
                             <Share2 className="mr-1 h-3 w-3" /> Compartilhar
                           </Button>
@@ -270,7 +295,7 @@ export default function ContractsPage() {
                 </div>
               )}
                <p className="text-xs text-muted-foreground pt-2">
-                Nota: A página pública para assinatura ainda está em desenvolvimento. Estes links são para fins de demonstração da estrutura.
+                Nota: A página pública para assinatura ainda está em desenvolvimento. Estes links são para fins de demonstração da estrutura. O prestador assina pela plataforma.
               </p>
             </div>
             <DialogFooter className="sm:justify-start">
@@ -286,5 +311,3 @@ export default function ContractsPage() {
     </div>
   );
 }
-
-    
