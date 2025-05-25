@@ -99,6 +99,7 @@ export default function ProjectsPage() {
       setProjects(projectsData);
 
     } catch (error) {
+      console.error("Erro ao buscar projetos ou clientes:", error);
       toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar projetos e clientes.", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -209,10 +210,12 @@ export default function ProjectsPage() {
     setIsFormOpen(true);
   };
 
-  const filteredProjects = projects.filter(project =>
-    project.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (clients.find(c => c.id === project.clienteId)?.nome.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProjects = projects.filter(project => {
+    const clientName = clients.find(c => c.id === project.clienteId)?.nome;
+    const searchTermLower = searchTerm.toLowerCase();
+    return project.nome.toLowerCase().includes(searchTermLower) ||
+           (clientName && clientName.toLowerCase().includes(searchTermLower));
+  });
 
   const getClientName = (clienteId: string) => {
     return clients.find(c => c.id === clienteId)?.nome || "Desconhecido";
@@ -326,7 +329,7 @@ export default function ProjectsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading && projects.length === 0 && clients.length === 0 ? ( 
+          {loading ? ( 
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
                <p className="ml-2">Carregando projetos...</p>
@@ -336,7 +339,7 @@ export default function ProjectsPage() {
                 <Briefcase className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-xl font-semibold text-foreground">Nenhum projeto encontrado.</h3>
                 <p className="text-muted-foreground">
-                  {searchTerm ? "Tente um termo de busca diferente." : "Comece adicionando seu primeiro projeto."}
+                  {searchTerm ? "Tente um termo de busca diferente ou verifique os filtros." : "Comece adicionando seu primeiro projeto."}
                 </p>
                 {!searchTerm && (
                     <Button onClick={openNewForm} className="mt-4">
