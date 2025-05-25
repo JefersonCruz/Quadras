@@ -9,6 +9,8 @@ import type { Usuario } from "@/types/firestore";
 import Image from "next/image";
 import React, { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface AssinaturaContatoFormProps {
   control: Control<any>;
@@ -16,6 +18,7 @@ interface AssinaturaContatoFormProps {
   user?: Usuario | null;
   setValue: UseFormSetValue<any>;
   assinaturaPreview?: string | null;
+  assinaturaFile?: File | null; // Added to display file name
   onAssinaturaChange: (file: File | undefined) => void;
 }
 
@@ -25,6 +28,7 @@ export default function AssinaturaContatoForm({
   user,
   setValue,
   assinaturaPreview: initialPreview,
+  assinaturaFile,
   onAssinaturaChange,
 }: AssinaturaContatoFormProps) {
   const { toast } = useToast();
@@ -40,10 +44,9 @@ export default function AssinaturaContatoForm({
     if (file) {
       if (file.size > 1 * 1024 * 1024) { // 1MB size limit for signature
         toast({ title: "Arquivo muito grande", description: "A assinatura deve ter no máximo 1MB.", variant: "destructive"});
-        // Clear the file input visually if possible, or notify user to select another
-        event.target.value = ""; // Attempt to clear
+        event.target.value = ""; 
         onAssinaturaChange(undefined);
-        setLocalAssinaturaPreview(null); // Clear preview
+        setLocalAssinaturaPreview(null); 
         return;
       }
       const reader = new FileReader();
@@ -80,7 +83,7 @@ export default function AssinaturaContatoForm({
           <Controller
             name="assinaturaEletricistaFile"
             control={control}
-            render={({ field: { onChange: _onChange, value, ...restField} }) => ( // _onChange to avoid conflict if not used directly
+            render={({ field: { onChange: _onChange, value, ...restField} }) => ( 
                  <Input 
                     id="assinaturaEletricistaFile" 
                     type="file" 
@@ -92,6 +95,9 @@ export default function AssinaturaContatoForm({
             )}
           />
           <p className="text-xs text-muted-foreground mt-1">Recomendado: Fundo transparente (PNG). Máx: 1MB.</p>
+          {assinaturaFile && (
+            <p className="text-xs text-muted-foreground mt-1">Arquivo selecionado: {assinaturaFile.name}</p>
+          )}
           {localAssinaturaPreview && (
             <div className="mt-2 p-2 border rounded-md bg-muted/50 inline-block">
               <Image src={localAssinaturaPreview} alt="Preview da Assinatura" width={150} height={75} className="object-contain" data-ai-hint="signature" />
@@ -122,13 +128,8 @@ export default function AssinaturaContatoForm({
   );
 }
 
-// Dummy Card components
-const Card: React.FC<{className?: string, children: React.ReactNode}> = ({ className, children }) => <div className={cn("border rounded-lg shadow-sm bg-card text-card-foreground", className)}>{children}</div>;
-const CardHeader: React.FC<{children: React.ReactNode}> = ({ children }) => <div className="p-6 flex flex-col space-y-1.5">{children}</div>;
-const CardTitle: React.FC<{children: React.ReactNode}> = ({ children }) => <h3 className="text-2xl font-semibold leading-none tracking-tight">{children}</h3>;
-const CardContent: React.FC<{className?: string, children: React.ReactNode}> = ({ className, children }) => <div className={cn("p-6 pt-0", className)}>{children}</div>;
-
+// Dummy Card components are not needed here as they are imported from ui/card
 // cn utility
-function cn(...inputs: any[]): string {
-  return inputs.filter(Boolean).join(' ');
-}
+// function cn(...inputs: any[]): string {
+//   return inputs.filter(Boolean).join(' ');
+// }

@@ -18,7 +18,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Label } from "@/components/ui/label";
-import { generateTechnicalSheetPdf } from "@/lib/pdfUtils"; // Import the utility
+import { generateTechnicalSheetPdf } from "@/lib/pdfUtils"; 
 
 // Import new sectional components
 import FichaHeaderForm from "@/components/dashboard/technical-sheets/FichaHeaderForm";
@@ -91,6 +91,7 @@ export default function TechnicalSheetsPage() {
       nomeEletricista: userData?.nome || user?.displayName || "",
       contatoEletricista: "",
       ramalPortaria: "",
+      assinaturaEletricistaFile: undefined,
     },
   });
 
@@ -134,15 +135,15 @@ export default function TechnicalSheetsPage() {
   useEffect(() => {
     if (userData?.nome || user?.displayName) {
         const nome = userData?.nome || user?.displayName || "";
-        setValue("responsavelTecnico", nome);
-        setValue("nomeEletricista", nome);
+        setValue("responsavelTecnico", nome, { shouldValidate: true });
+        setValue("nomeEletricista", nome, { shouldValidate: true });
     }
   }, [user, userData, setValue]);
 
   useEffect(() => {
     if (selectedClientId) {
       setFilteredProjects(projects.filter(p => p.clienteId === selectedClientId));
-      setValue("projetoId",""); 
+      setValue("projetoId","", { shouldValidate: true }); 
     } else {
       setFilteredProjects([]);
     }
@@ -165,26 +166,27 @@ export default function TechnicalSheetsPage() {
     setLoadingPdf(true);
     const formData = getValues(); 
 
-    // Basic validation check
     const validationResult = technicalSheetSchema.safeParse(formData);
     if (!validationResult.success) {
       toast({ title: "Dados inválidos", description: "Por favor, corrija os erros no formulário antes de gerar o PDF.", variant: "destructive"});
+      // Log detailed errors for debugging
+      console.error("Validation Errors:", validationResult.error.flatten().fieldErrors);
       setLoadingPdf(false);
       return;
     }
     
     const sheetDataForPdf: FichaTecnica = {
-      ...validationResult.data, // Use validated data
+      ...validationResult.data, 
       owner: user!.uid,
       logotipoEmpresaUrl: empresaData?.logotipo || "",
       nomeEmpresa: empresaData?.nome || "Não configurado",
-      dataInstalacao: Timestamp.fromDate(validationResult.data.dataInstalacao), // Convert Date to Timestamp
-      assinaturaEletricistaUrl: assinaturaPreview || "", // Use preview for current form; existing URL for saved sheets
+      dataInstalacao: Timestamp.fromDate(validationResult.data.dataInstalacao), 
+      assinaturaEletricistaUrl: assinaturaPreview || "", 
       observacaoNBR: "Conforme NBR 5410",
       textoAcessoOnline: "Acesso aos projetos online",
       qrCodeUrl: "", 
       linkFichaPublica: "",
-      dataCriacao: Timestamp.now(), // This is for generation time, not necessarily save time
+      dataCriacao: Timestamp.now(), 
     };
 
     try {
@@ -202,7 +204,7 @@ export default function TechnicalSheetsPage() {
     if (!user) return;
     setLoading(true);
 
-    let assinaturaUrlFinal = "";
+    let assinaturaUrlFinal = assinaturaPreview || ""; // Keep existing preview if no new file
     if (assinaturaFile) {
       const storageRef = ref(storage, `fichasTecnicas/${user.uid}/${Timestamp.now().toMillis()}_${assinaturaFile.name}`);
       try {
@@ -225,7 +227,7 @@ export default function TechnicalSheetsPage() {
         nomeEmpresa: empresaData?.nome || "Não configurado",
         dataInstalacao: Timestamp.fromDate(data.dataInstalacao),
         versaoFicha: data.versaoFicha || "v1.0", 
-        assinaturaEletricistaUrl: assinaturaUrlFinal || assinaturaPreview || "", // Use uploaded or existing preview if no new file
+        assinaturaEletricistaUrl: assinaturaUrlFinal,
         observacaoNBR: "Conforme NBR 5410",
         textoAcessoOnline: "Acesso aos projetos online",
         qrCodeUrl: "", 
@@ -234,13 +236,27 @@ export default function TechnicalSheetsPage() {
       };
       await addDoc(collection(db, "fichasTecnicas"), sheetData);
       toast({ title: "Ficha Técnica criada!", description: "A nova ficha técnica foi salva com sucesso." });
-      reset(); 
+      
+      // Reset form and related states
+      reset({
+        clienteId: "",
+        projetoId: "",
+        tituloFicha: "FICHA TÉCNICA – QUADRO DE DISTRIBUIÇÃO",
+        identificacaoLocal: "",
+        dataInstalacao: new Date(),
+        responsavelTecnico: userData?.nome || user?.displayName || "",
+        versaoFicha: "v1.0",
+        circuitos: [], 
+        observacaoDR: false,
+        descricaoDROpcional: "",
+        nomeEletricista: userData?.nome || user?.displayName || "",
+        contatoEletricista: "",
+        ramalPortaria: "",
+        assinaturaEletricistaFile: undefined,
+      }); 
       setAssinaturaPreview(null);
       setAssinaturaFile(undefined);
-      setValue("dataInstalacao", new Date()); 
-      setValue("circuitos", []); 
-      setValue("responsavelTecnico", userData?.nome || user?.displayName || "");
-      setValue("nomeEletricista", userData?.nome || user?.displayName || "");
+      circuitosFieldArray.replace([]); // Ensure circuits table is also cleared
 
 
     } catch (error) {
@@ -290,7 +306,7 @@ export default function TechnicalSheetsPage() {
                     <Label htmlFor="projetoId">Projeto</Label>
                     <Controller name="projetoId" control={control} render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClientId || filteredProjects.length === 0}>
-                        <SelectTrigger><SelectValue placeholder={!selectedClientId ? "Selecione um cliente" : "Selecione um projeto"} /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={!selectedClientId ? "Selecione um cliente primeiro" : "Selecione um projeto"} /></SelectTrigger>
                         <SelectContent>{filteredProjects.map(p => <SelectItem key={p.id} value={p.id!}>{p.nome}</SelectItem>)}</SelectContent>
                         </Select>
                     )} />
@@ -309,6 +325,7 @@ export default function TechnicalSheetsPage() {
                 user={userData} 
                 setValue={setValue}
                 assinaturaPreview={assinaturaPreview}
+                assinaturaFile={assinaturaFile}
                 onAssinaturaChange={handleAssinaturaChange}
             />
               
@@ -343,7 +360,7 @@ export default function TechnicalSheetsPage() {
                             <Share2 className="mr-2 h-4 w-4" /> Compartilhar
                         </Button>
                      </div>
-                      {Object.keys(errors).length > 0 && (
+                      {Object.keys(errors).length > 0 && !loadingData && (
                         <p className="text-xs text-destructive mt-2 text-center">Corrija os erros no formulário para baixar o PDF.</p>
                       )}
                 </CardContent>
@@ -353,4 +370,3 @@ export default function TechnicalSheetsPage() {
     </div>
   );
 }
-
