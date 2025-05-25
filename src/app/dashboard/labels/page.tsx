@@ -5,7 +5,7 @@ import type { Etiqueta, Cliente, Projeto } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Tag, Lightbulb, PlugZap, Monitor, ShowerHead, WashingMachine, Faucet, Oven, Bath, HelpCircle } from "lucide-react";
+import { Loader2, Tag, Lightbulb, PlugZap, Monitor, ShowerHead, WashingMachine, Oven, Bath, HelpCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,7 +17,6 @@ import { db } from "@/lib/firebase/config";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-// Removed Image import as it's no longer used for the preview
 
 const labelSchema = z.object({
   clienteId: z.string().min(1, "Selecione um cliente."),
@@ -109,7 +108,6 @@ export default function LabelsPage() {
     if (tipoLower.includes("computador") || tipoLower.includes("pc")) return <Monitor className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("chuveiro")) return <ShowerHead className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("lavanderia") || tipoLower.includes("máquina de lavar") || tipoLower.includes("lava roupa")) return <WashingMachine className="h-7 w-7 mr-2 shrink-0" />;
-    if (tipoLower.includes("torneira")) return <Faucet className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return <Oven className="h-7 w-7 mr-2 shrink-0" />;
     if (tipoLower.includes("banheiro") || tipoLower.includes("banheira")) return <Bath className="h-7 w-7 mr-2 shrink-0" />;
     return <HelpCircle className="h-7 w-7 mr-2 shrink-0 text-muted-foreground" />;
@@ -233,22 +231,17 @@ export default function LabelsPage() {
                     <CardTitle>Visualização da Etiqueta</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center justify-center p-4 bg-muted rounded-md min-h-[200px]">
-                     {/* New Label Preview Structure */}
                     <div className="w-[260px] h-[100px] bg-white border-2 border-black rounded-lg flex font-sans shadow-md">
-                        {/* Left Part (Circuit Number) */}
                         <div className="w-1/3 flex items-center justify-center border-r-2 border-black p-1">
                             <span className="text-3xl font-bold text-black truncate" title={previewCircuitId}>{previewCircuitId}</span>
                         </div>
-                        {/* Right Part */}
                         <div className="w-2/3 flex flex-col">
-                            {/* Top Right (Icon + Label Type) */}
                             <div className="flex-1 flex items-center p-2 border-b-2 border-black">
                                 {getPreviewIcon(watchedTipo || "")}
                                 <span className="font-bold text-base text-black uppercase truncate" title={previewTipoText}>
                                   {previewTipoText}
                                 </span>
                             </div>
-                            {/* Bottom Right (Disjuntor) */}
                             <div className="flex-1 flex items-center justify-center p-1">
                                 <span className="text-xs text-black uppercase">{previewDisjuntorText}</span>
                             </div>
@@ -272,3 +265,4 @@ export default function LabelsPage() {
     </div>
   );
 }
+
