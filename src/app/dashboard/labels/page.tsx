@@ -5,7 +5,7 @@ import type { Etiqueta, Cliente, Projeto } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, PlusCircle, Tag } from "lucide-react";
+import { Loader2, Tag, Lightbulb, PlugZap, Monitor, ShowerHead, WashingMachine, Faucet, Oven, Bath, HelpCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,7 +17,7 @@ import { db } from "@/lib/firebase/config";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import Image from "next/image";
+// Removed Image import as it's no longer used for the preview
 
 const labelSchema = z.object({
   clienteId: z.string().min(1, "Selecione um cliente."),
@@ -44,6 +44,8 @@ export default function LabelsPage() {
   });
 
   const selectedClientId = watch("clienteId");
+  const watchedTipo = watch("tipo");
+  const watchedCircuito = watch("circuito");
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -76,14 +78,11 @@ export default function LabelsPage() {
     } else {
       setFilteredProjects([]);
     }
-    // Reset projetoId if client changes and selected project is not for this client
     const currentProjectId = watch("projetoId");
     if (currentProjectId && !projects.find(p => p.id === currentProjectId && p.clienteId === selectedClientId)) {
         reset(prev => ({...prev, projetoId: ""}));
     }
-
   }, [selectedClientId, projects, watch, reset]);
-
 
   const onSubmit = async (data: LabelFormData) => {
     if (!user) return;
@@ -95,13 +94,43 @@ export default function LabelsPage() {
       };
       await addDoc(collection(db, "etiquetas"), labelData);
       toast({ title: "Etiqueta criada!", description: "A nova etiqueta foi salva com sucesso." });
-      reset(); // Reset form after submission
+      reset(); 
     } catch (error) {
       toast({ title: "Erro ao criar etiqueta", description: "Não foi possível salvar a etiqueta.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
+
+  const getPreviewIcon = (tipo: string) => {
+    const tipoLower = tipo.toLowerCase();
+    if (tipoLower.includes("ilumina")) return <Lightbulb className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("tomada")) return <PlugZap className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("computador") || tipoLower.includes("pc")) return <Monitor className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("chuveiro")) return <ShowerHead className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("lavanderia") || tipoLower.includes("máquina de lavar") || tipoLower.includes("lava roupa")) return <WashingMachine className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("torneira")) return <Faucet className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("forno") || tipoLower.includes("fogão") || tipoLower.includes("cooktop")) return <Oven className="h-7 w-7 mr-2 shrink-0" />;
+    if (tipoLower.includes("banheiro") || tipoLower.includes("banheira")) return <Bath className="h-7 w-7 mr-2 shrink-0" />;
+    return <HelpCircle className="h-7 w-7 mr-2 shrink-0 text-muted-foreground" />;
+  };
+
+  const getPreviewDisjuntor = (tipo: string): string => {
+    const tipoLower = tipo.toLowerCase();
+    if (tipoLower.includes("chuveiro")) return "40A";
+    if (tipoLower.includes("forno") || tipoLower.includes("cooktop")) return "25A";
+    if (tipoLower.includes("ilumina")) return "10A";
+    if (tipoLower.includes("lavanderia") || tipoLower.includes("torneira")) return "16A";
+    if (tipoLower.includes("banheiro") && !tipoLower.includes("chuveiro")) return "20A"; // General bathroom, not shower
+    // Default for tomada, computador, etc.
+    if (tipoLower.includes("tomada") || tipoLower.includes("computador")) return "20A";
+    return "XX A"; // Default placeholder
+  };
+  
+  const previewCircuitId = watchedCircuito ? (watchedCircuito.trim().split(/[\s-/]/)[0] || "CX").toUpperCase() : "CX";
+  const previewTipoText = watchedTipo || "TIPO ETIQUETA";
+  const previewDisjuntorText = `DISJUNTOR ${getPreviewDisjuntor(watchedTipo || "")}`;
+
 
   return (
     <div className="space-y-6">
@@ -166,27 +195,27 @@ export default function LabelsPage() {
                 <Controller
                   name="tipo"
                   control={control}
-                  render={({ field }) => <Input id="tipo" {...field} placeholder="Ex: Quadro de Distribuição, Tomada, Luminária" />}
+                  render={({ field }) => <Input id="tipo" {...field} placeholder="Ex: Iluminação Cozinha, Tomada Sala" />}
                 />
                 {errors.tipo && <p className="text-sm text-destructive mt-1">{errors.tipo.message}</p>}
               </div>
 
               <div>
-                <Label htmlFor="circuito">Circuito</Label>
+                <Label htmlFor="circuito">Circuito (ID)</Label>
                 <Controller
                   name="circuito"
                   control={control}
-                  render={({ field }) => <Input id="circuito" {...field} placeholder="Ex: C1, C2-Iluminação" />}
+                  render={({ field }) => <Input id="circuito" {...field} placeholder="Ex: C1, C2A, QDC-01.C3" />}
                 />
                 {errors.circuito && <p className="text-sm text-destructive mt-1">{errors.circuito.message}</p>}
               </div>
 
               <div>
-                <Label htmlFor="posicao">Posição / Localização</Label>
+                <Label htmlFor="posicao">Posição / Localização Detalhada</Label>
                 <Controller
                   name="posicao"
                   control={control}
-                  render={({ field }) => <Input id="posicao" {...field} placeholder="Ex: QDC-01, Sala-T01, Cozinha-L02" />}
+                  render={({ field }) => <Input id="posicao" {...field} placeholder="Ex: TUG Cozinha Bancada, Luminária Central Quarto" />}
                 />
                 {errors.posicao && <p className="text-sm text-destructive mt-1">{errors.posicao.message}</p>}
               </div>
@@ -201,11 +230,31 @@ export default function LabelsPage() {
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Visualização da Etiqueta (Exemplo)</CardTitle>
+                    <CardTitle>Visualização da Etiqueta</CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col items-center justify-center p-4 bg-muted rounded-md aspect-[3/2]">
-                     <Image src="https://placehold.co/300x200.png" alt="Exemplo de Etiqueta" width={300} height={200} className="rounded shadow-md" data-ai-hint="label technical" />
-                     <p className="text-sm text-muted-foreground mt-2">A etiqueta gerada incluirá um QR Code.</p>
+                <CardContent className="flex flex-col items-center justify-center p-4 bg-muted rounded-md min-h-[200px]">
+                     {/* New Label Preview Structure */}
+                    <div className="w-[260px] h-[100px] bg-white border-2 border-black rounded-lg flex font-sans shadow-md">
+                        {/* Left Part (Circuit Number) */}
+                        <div className="w-1/3 flex items-center justify-center border-r-2 border-black p-1">
+                            <span className="text-3xl font-bold text-black truncate" title={previewCircuitId}>{previewCircuitId}</span>
+                        </div>
+                        {/* Right Part */}
+                        <div className="w-2/3 flex flex-col">
+                            {/* Top Right (Icon + Label Type) */}
+                            <div className="flex-1 flex items-center p-2 border-b-2 border-black">
+                                {getPreviewIcon(watchedTipo || "")}
+                                <span className="font-bold text-base text-black uppercase truncate" title={previewTipoText}>
+                                  {previewTipoText}
+                                </span>
+                            </div>
+                            {/* Bottom Right (Disjuntor) */}
+                            <div className="flex-1 flex items-center justify-center p-1">
+                                <span className="text-xs text-black uppercase">{previewDisjuntorText}</span>
+                            </div>
+                        </div>
+                    </div>
+                     <p className="text-sm text-muted-foreground mt-3 text-center">A etiqueta real será gerada com QR Code (funcionalidade futura).</p>
                 </CardContent>
             </Card>
              <Card>
@@ -213,9 +262,9 @@ export default function LabelsPage() {
                     <CardTitle>Dicas</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
-                    <p>• Use nomenclaturas padronizadas para Circuitos e Posições.</p>
-                    <p>• O QR Code será gerado automaticamente (funcionalidade futura).</p>
-                    <p>• Verifique os dados antes de confirmar a criação.</p>
+                    <p>• **Tipo da Etiqueta:** Seja descritivo (Ex: "Tomada Dupla Bancada", "Luminária LED Corredor").</p>
+                    <p>• **Circuito (ID):** Use o identificador único do circuito (Ex: "C1", "A2.1").</p>
+                    <p>• **Posição:** Detalhe a localização exata (Ex: "Parede Leste, ao lado da Porta").</p>
                 </CardContent>
             </Card>
         </div>
