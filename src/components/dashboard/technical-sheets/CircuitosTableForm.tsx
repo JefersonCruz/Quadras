@@ -21,15 +21,21 @@ interface CircuitosTableFormProps {
 }
 
 const circuitCounts = ["6", "8", "12", "18", "24", "32", "44"];
+const CLEAR_TEMPLATE_VALUE = "clear"; // Define a constant for clarity
 
 export default function CircuitosTableForm({ control, errors, fieldArray, setValue }: CircuitosTableFormProps) {
   const { fields, append, remove, replace } = fieldArray;
 
   const handleTemplateChange = (countStr: string) => {
-    if (!countStr) {
-      replace([]); // Clear if no selection
+    if (countStr === CLEAR_TEMPLATE_VALUE) { // Check for the specific clear value
+      replace([]); // Clear if "Limpar/Manual" is selected
       return;
     }
+    if (!countStr) { // Handle cases where countStr might still be empty for other reasons (though unlikely with current setup)
+      replace([]);
+      return;
+    }
+
     const targetCount = parseInt(countStr, 10);
     let combinedTemplates: TemplateCircuito[] = [];
 
@@ -42,39 +48,26 @@ export default function CircuitosTableForm({ control, errors, fieldArray, setVal
         if (currentCount < targetCount && keyCount <= targetCount) {
             const templateKeyStr = keyCount.toString();
             if (modelosCircuitos.modelos[templateKeyStr]) {
-                 // Ensure we only add up to the targetCount
                 const circuitsToAdd = modelosCircuitos.modelos[templateKeyStr];
                 circuitsToAdd.forEach(circuit => {
                     if(combinedTemplates.length < targetCount) {
-                        // Check if a circuit with this 'numero' (effectively an ID here) already exists
-                        // This logic is to handle the additive nature of the original template request.
-                        // If the template numbers are unique globally, this find is not strictly needed for uniqueness.
                         if (!combinedTemplates.find(ct => ct.numero === circuit.numero)) {
                              combinedTemplates.push(circuit);
                         }
                     }
                 });
-                // This ensures we don't overfill based on how templates are structured.
-                // The provided templates are cumulative, so this logic works.
-                // If user selects "8", we add "6" and then "8".
             }
-             // Update currentCount based on the actual number of unique items from template key
-            // This assumes that each key ("6", "8", etc.) contains circuits that are unique
-            // and contribute towards reaching the targetCount.
-            // For the cumulative logic:
              if(keyCount > currentCount) currentCount = keyCount;
-
         }
     }
     
-    // Ensure the final list doesn't exceed targetCount, and sort by 'numero'
     const finalCircuits = combinedTemplates
         .sort((a,b) => a.numero - b.numero)
         .slice(0, targetCount)
         .map(t => ({
             nome: t.nome,
             disjuntor: t.disjuntor,
-            caboMM: t.cabo, // Map 'cabo' to 'caboMM'
+            caboMM: t.cabo, 
             observacoes: t.observacao || "",
         } as CircuitoFicha ));
 
@@ -98,7 +91,7 @@ export default function CircuitosTableForm({ control, errors, fieldArray, setVal
                 {circuitCounts.map(count => (
                   <SelectItem key={count} value={count}>{count} Circuitos</SelectItem>
                 ))}
-                <SelectItem value="">Limpar/Manual</SelectItem>
+                <SelectItem value={CLEAR_TEMPLATE_VALUE}>Limpar/Manual</SelectItem>
               </SelectContent>
             </Select>
             <Button type="button" variant="outline" onClick={() => append({ nome: "", disjuntor: "", caboMM: "", observacoes: "" })}>
@@ -171,7 +164,6 @@ export default function CircuitosTableForm({ control, errors, fieldArray, setVal
         {errors.circuitos && typeof errors.circuitos === 'object' && 'message' in errors.circuitos && !Array.isArray(errors.circuitos) && (
            <p className="text-sm text-destructive mt-2">{errors.circuitos.message}</p>
         )}
-        {/* Moved "Adicionar Circuito" button next to the select for better UX */}
       </CardContent>
     </Card>
   );
