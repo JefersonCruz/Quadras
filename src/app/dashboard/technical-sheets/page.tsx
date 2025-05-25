@@ -18,9 +18,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Label } from "@/components/ui/label";
-import jsPDF from "jspdf";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { generateTechnicalSheetPdf } from "@/lib/pdfUtils"; // Import the utility
 
 // Import new sectional components
 import FichaHeaderForm from "@/components/dashboard/technical-sheets/FichaHeaderForm";
@@ -165,110 +163,35 @@ export default function TechnicalSheetsPage() {
 
   const handleDownloadPdf = async () => {
     setLoadingPdf(true);
-    const data = getValues(); // Get current form values
+    const formData = getValues(); 
 
-    // Basic validation check (optional, as button might only be active after main form validation)
-    // const result = technicalSheetSchema.safeParse(data);
-    // if (!result.success) {
-    //   toast({ title: "Dados inválidos", description: "Por favor, corrija os erros no formulário antes de gerar o PDF.", variant: "destructive"});
-    //   setLoadingPdf(false);
-    //   return;
-    // }
-    // const validData = result.data;
+    // Basic validation check
+    const validationResult = technicalSheetSchema.safeParse(formData);
+    if (!validationResult.success) {
+      toast({ title: "Dados inválidos", description: "Por favor, corrija os erros no formulário antes de gerar o PDF.", variant: "destructive"});
+      setLoadingPdf(false);
+      return;
+    }
+    
+    const sheetDataForPdf: FichaTecnica = {
+      ...validationResult.data, // Use validated data
+      owner: user!.uid,
+      logotipoEmpresaUrl: empresaData?.logotipo || "",
+      nomeEmpresa: empresaData?.nome || "Não configurado",
+      dataInstalacao: Timestamp.fromDate(validationResult.data.dataInstalacao), // Convert Date to Timestamp
+      assinaturaEletricistaUrl: assinaturaPreview || "", // Use preview for current form; existing URL for saved sheets
+      observacaoNBR: "Conforme NBR 5410",
+      textoAcessoOnline: "Acesso aos projetos online",
+      qrCodeUrl: "", 
+      linkFichaPublica: "",
+      dataCriacao: Timestamp.now(), // This is for generation time, not necessarily save time
+    };
 
     try {
-      const doc = new jsPDF();
-      let yPos = 20;
-      const lineSpacing = 7;
-      const sectionSpacing = 10;
-      const indent = 10;
-
-      // --- Helper to add text and increment yPos ---
-      const addText = (text: string, x: number, y: number, options?: any) => {
-        doc.text(text, x, y, options);
-        return y + lineSpacing;
-      };
-      const addTitle = (text: string, x: number, y: number) => {
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        const newY = addText(text, x, y);
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        return newY;
-      };
-
-      // --- SEÇÃO 1: Cabeçalho e Identificação ---
-      yPos = addTitle("1. Cabeçalho e Identificação", indent, yPos);
-      if (empresaData?.logotipo) {
-        yPos = addText(`Logotipo Empresa: ${empresaData.logotipo}`, indent + 5, yPos); // Placeholder for image
-      }
-      yPos = addText(`Nome Empresa: ${empresaData?.nome || "Não configurado"}`, indent + 5, yPos);
-      yPos = addText(`Título da Ficha: ${data.tituloFicha}`, indent + 5, yPos);
-      yPos = addText(`Local/Identificação: ${data.identificacaoLocal}`, indent + 5, yPos);
-      yPos = addText(`Data da Instalação: ${format(new Date(data.dataInstalacao), "dd/MM/yyyy", { locale: ptBR })}`, indent + 5, yPos);
-      yPos = addText(`Responsável Técnico: ${data.responsavelTecnico}`, indent + 5, yPos);
-      yPos = addText(`Versão da Ficha: ${data.versaoFicha}`, indent + 5, yPos);
-      yPos += sectionSpacing;
-
-      // --- SEÇÃO 2: Tabela de Distribuição dos Circuitos ---
-      yPos = addTitle("2. Distribuição dos Circuitos", indent, yPos);
-      if (data.circuitos.length > 0) {
-        doc.setFont(undefined, 'bold');
-        yPos = addText("N° | Circuito | Disjuntor | Cabo (mm²) | Observações", indent + 5, yPos);
-        doc.setFont(undefined, 'normal');
-        data.circuitos.forEach((circ, index) => {
-          const circuitoText = `${index + 1} | ${circ.nome} | ${circ.disjuntor} | ${circ.caboMM} | ${circ.observacoes || "-"}`;
-          yPos = addText(circuitoText, indent + 5, yPos);
-          if (yPos > 270) { // Page break logic
-            doc.addPage();
-            yPos = 20;
-          }
-        });
-      } else {
-        yPos = addText("Nenhum circuito adicionado.", indent + 5, yPos);
-      }
-      yPos += sectionSpacing;
-
-      // --- SEÇÃO 3: Observações Técnicas ---
-      if (yPos > 250) { doc.addPage(); yPos = 20; }
-      yPos = addTitle("3. Observações Técnicas", indent, yPos);
-      yPos = addText("Norma de Referência: Conforme NBR 5410", indent + 5, yPos);
-      yPos = addText(`Disjuntor DR: ${data.observacaoDR ? "Sim" : "Não"}`, indent + 5, yPos);
-      if (data.observacaoDR && data.descricaoDROpcional) {
-        yPos = addText(`Descrição DR: ${data.descricaoDROpcional}`, indent + 5, yPos);
-      } else if (!data.observacaoDR && data.descricaoDROpcional){
-         yPos = addText(`Descrição DR: ${data.descricaoDROpcional}`, indent + 5, yPos);
-      }
-      yPos += sectionSpacing;
-      
-      // --- SEÇÃO 4: QR Code e Acesso ---
-      if (yPos > 260) { doc.addPage(); yPos = 20; }
-      yPos = addTitle("4. QR Code e Acesso", indent, yPos);
-      yPos = addText("QR Code da Ficha: (Será gerado automaticamente)", indent + 5, yPos);
-      yPos = addText("Texto de Acesso Online: Acesso aos projetos online", indent + 5, yPos);
-      yPos = addText("Link da Ficha Técnica: (Será gerado automaticamente)", indent + 5, yPos);
-      yPos += sectionSpacing;
-
-      // --- SEÇÃO 5: Assinatura e Contato ---
-      if (yPos > 240) { doc.addPage(); yPos = 20; }
-      yPos = addTitle("5. Assinatura e Contato", indent, yPos);
-      yPos = addText(`Nome Eletricista/Responsável: ${data.nomeEletricista}`, indent + 5, yPos);
-      if (assinaturaPreview) { // If a preview (URL) exists
-         yPos = addText(`Assinatura Digital: ${assinaturaPreview}`, indent + 5, yPos); // Placeholder for image
-      } else {
-         yPos = addText(`Assinatura Digital: (Não fornecida)`, indent + 5, yPos);
-      }
-      yPos = addText(`Contato: ${data.contatoEletricista}`, indent + 5, yPos);
-      if (data.ramalPortaria) {
-        yPos = addText(`Ramal Portaria: ${data.ramalPortaria}`, indent + 5, yPos);
-      }
-      
-      doc.save("ficha-tecnica.pdf");
+      await generateTechnicalSheetPdf(sheetDataForPdf);
       toast({ title: "PDF Gerado!", description: "O download da ficha técnica foi iniciado." });
-
-    } catch (error) {
-        console.error("Erro ao gerar PDF:", error);
-        toast({ title: "Erro ao gerar PDF", description: "Não foi possível gerar o arquivo PDF.", variant: "destructive" });
+    } catch (error: any) {
+        toast({ title: "Erro ao gerar PDF", description: error.message || "Não foi possível gerar o arquivo PDF.", variant: "destructive" });
     } finally {
         setLoadingPdf(false);
     }
@@ -413,13 +336,16 @@ export default function TechnicalSheetsPage() {
                         <Button onClick={handleDownloadPngExample} variant="outline" size="sm">
                             <ImageIcon className="mr-2 h-4 w-4" /> Layout PNG (Exemplo)
                         </Button>
-                        <Button onClick={handleDownloadPdf} variant="outline" size="sm" disabled={loadingPdf || loadingData}>
+                        <Button onClick={handleDownloadPdf} variant="outline" size="sm" disabled={loadingPdf || loadingData || Object.keys(errors).length > 0}>
                             {loadingPdf ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />} Baixar PDF
                         </Button>
                         <Button disabled variant="outline" size="sm" title="Compartilhar (em breve)">
                             <Share2 className="mr-2 h-4 w-4" /> Compartilhar
                         </Button>
                      </div>
+                      {Object.keys(errors).length > 0 && (
+                        <p className="text-xs text-destructive mt-2 text-center">Corrija os erros no formulário para baixar o PDF.</p>
+                      )}
                 </CardContent>
             </Card>
         </div>
@@ -427,3 +353,4 @@ export default function TechnicalSheetsPage() {
     </div>
   );
 }
+

@@ -1,11 +1,11 @@
 
 "use client";
 
-import type { Projeto, Cliente } from "@/types/firestore";
+import type { Projeto, Cliente, FichaTecnica, Empresa } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, Loader2, Briefcase, Eye } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, Loader2, Briefcase, Eye, FileDown, Tags } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, Timestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, Timestamp, orderBy, limit, getDoc } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -50,6 +50,9 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { generateTechnicalSheetPdf } from "@/lib/pdfUtils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 const projectSchema = z.object({
   nome: z.string().min(3, "Nome do projeto deve ter no mínimo 3 caracteres."),
@@ -69,7 +72,9 @@ export default function ProjectsPage() {
 
   const [projects, setProjects] = useState<Projeto[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // General loading for page data
+  const [formSubmitting, setFormSubmitting] = useState(false); // For form submission
+  const [projectActionLoading, setProjectActionLoading] = useState<Record<string, boolean>>({}); // For individual project actions like PDF download
   const [searchTerm, setSearchTerm] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Projeto | null>(null);
@@ -83,14 +88,12 @@ export default function ProjectsPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // Fetch clients
       const clientQuery = query(collection(db, "clientes"), where("owner", "==", user.uid));
       const clientSnapshot = await getDocs(clientQuery);
       const clientsData = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
       setClients(clientsData);
 
-      // Fetch projects
-      const projectQuery = query(collection(db, "projetos"), where("owner", "==", user.uid));
+      const projectQuery = query(collection(db, "projetos"), where("owner", "==", user.uid), orderBy("dataCriacao", "desc"));
       const projectSnapshot = await getDocs(projectQuery);
       const projectsData = projectSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Projeto));
       setProjects(projectsData);
@@ -108,7 +111,6 @@ export default function ProjectsPage() {
 
   const openNewForm = useCallback(() => {
     setEditingProject(null);
-    // Form reset is handled by the useEffect below based on editingProject and isFormOpen
     setIsFormOpen(true);
   }, [setIsFormOpen, setEditingProject]);
 
@@ -124,7 +126,6 @@ export default function ProjectsPage() {
     const shouldOpenModal = searchParams.get('openNewProject') === 'true';
     if (shouldOpenModal) {
       openNewForm();
-      // Remove the query parameter to prevent re-opening on refresh or back navigation
       router.replace(pathname, { scroll: false });
     }
   }, [searchParams, openNewForm, router, pathname]);
@@ -132,12 +133,12 @@ export default function ProjectsPage() {
 
   const onSubmit = async (data: ProjectFormData) => {
     if (!user) return;
-    setLoading(true); // Set loading for form submission
+    setFormSubmitting(true);
     try {
       const projectData = {
         ...data,
         owner: user.uid,
-        dataCriacao: editingProject?.dataCriacao || Timestamp.now(), // Preserve original creation date or set new
+        dataCriacao: editingProject?.dataCriacao || Timestamp.now(), 
       };
 
       if (editingProject && editingProject.id) {
@@ -148,27 +149,58 @@ export default function ProjectsPage() {
         await addDoc(collection(db, "projetos"), projectData);
         toast({ title: "Projeto adicionado!", description: "Novo projeto cadastrado com sucesso." });
       }
-      fetchClientsAndProjects(); // Refetch projects
+      fetchClientsAndProjects(); 
       setIsFormOpen(false);
       setEditingProject(null);
     } catch (error) {
       console.error(error);
       toast({ title: "Erro ao salvar projeto", description: "Não foi possível salvar os dados.", variant: "destructive" });
     } finally {
-      setLoading(false); // Clear loading for form submission
+      setFormSubmitting(false);
     }
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    setLoading(true); // Set loading for delete operation
+    setProjectActionLoading(prev => ({ ...prev, [projectId]: true }));
     try {
       await deleteDoc(doc(db, "projetos", projectId));
       toast({ title: "Projeto excluído", description: "O projeto foi removido com sucesso." });
-      fetchClientsAndProjects(); // Refetch projects
+      fetchClientsAndProjects(); 
     } catch (error) {
       toast({ title: "Erro ao excluir", description: "Não foi possível remover o projeto.", variant: "destructive" });
     } finally {
-      setLoading(false); // Clear loading for delete operation
+      setProjectActionLoading(prev => ({ ...prev, [projectId]: false }));
+    }
+  };
+
+  const handleDownloadTechnicalSheet = async (projectId: string) => {
+    if (!user) return;
+    setProjectActionLoading(prev => ({ ...prev, [`pdf_${projectId}`]: true }));
+    try {
+      const q = query(
+        collection(db, "fichasTecnicas"),
+        where("owner", "==", user.uid),
+        where("projetoId", "==", projectId),
+        orderBy("dataCriacao", "desc"),
+        limit(1)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        toast({ title: "Nenhuma Ficha Encontrada", description: "Não há fichas técnicas para este projeto.", variant: "default" });
+        return;
+      }
+      
+      const fichaDoc = querySnapshot.docs[0];
+      const fichaData = { id: fichaDoc.id, ...fichaDoc.data() } as FichaTecnica;
+      
+      await generateTechnicalSheetPdf(fichaData);
+      toast({ title: "PDF Gerado!", description: "O download da ficha técnica foi iniciado." });
+
+    } catch (error: any) {
+      toast({ title: "Erro ao Baixar Ficha", description: error.message || "Não foi possível baixar a ficha técnica.", variant: "destructive" });
+    } finally {
+      setProjectActionLoading(prev => ({ ...prev, [`pdf_${projectId}`]: false }));
     }
   };
 
@@ -272,8 +304,8 @@ export default function ProjectsPage() {
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
-              <Button type="submit" disabled={loading}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Projeto"}
+              <Button type="submit" disabled={formSubmitting}>
+                {formSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Projeto"}
               </Button>
             </DialogFooter>
           </form>
@@ -294,7 +326,7 @@ export default function ProjectsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading && projects.length === 0 && clients.length === 0 ? ( // Check if initial data load is happening
+          {loading && projects.length === 0 && clients.length === 0 ? ( 
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
                <p className="ml-2">Carregando projetos...</p>
@@ -314,6 +346,7 @@ export default function ProjectsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+            <TooltipProvider>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -339,15 +372,45 @@ export default function ProjectsPage() {
                         </span>
                       </TableCell>
                       <TableCell>{project.dataCriacao ? format(project.dataCriacao.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditForm(project)}>
-                          <Edit className="h-4 w-4" /> <span className="sr-only">Editar</span>
-                        </Button>
+                      <TableCell className="text-right space-x-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleDownloadTechnicalSheet(project.id!)} disabled={projectActionLoading[`pdf_${project.id!}`]}>
+                              {projectActionLoading[`pdf_${project.id!}`] ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                              <span className="sr-only">Baixar Ficha Técnica</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Baixar Ficha Técnica</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                             <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                              <Tags className="h-4 w-4" />
+                              <span className="sr-only">Baixar Etiquetas</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Baixar Etiquetas (em breve)</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openEditForm(project)}>
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Editar Projeto</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Editar Projeto</p></TooltipContent>
+                        </Tooltip>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" disabled={loading}>
-                              <Trash2 className="h-4 w-4" /> <span className="sr-only">Excluir</span>
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                 <Button variant="destructive" size="icon" className="h-8 w-8" disabled={projectActionLoading[project.id!]}>
+                                  <Trash2 className="h-4 w-4" />
+                                  <span className="sr-only">Excluir Projeto</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Excluir Projeto</p></TooltipContent>
+                            </Tooltip>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
@@ -358,8 +421,8 @@ export default function ProjectsPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteProject(project.id!)} disabled={loading}>
-                                {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null} Excluir
+                              <AlertDialogAction onClick={() => handleDeleteProject(project.id!)} disabled={projectActionLoading[project.id!]}>
+                                {projectActionLoading[project.id!] ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null} Excluir
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -369,6 +432,7 @@ export default function ProjectsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </TooltipProvider>
             </div>
           )}
         </CardContent>
@@ -376,3 +440,4 @@ export default function ProjectsPage() {
     </div>
   );
 }
+
