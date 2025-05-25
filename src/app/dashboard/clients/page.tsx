@@ -5,14 +5,13 @@ import type { Cliente } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, Loader2, UserPlus, Eye } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, Loader2, UserPlus, Eye, Users } from "lucide-react"; // Added Users icon
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
@@ -23,7 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -45,6 +44,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 
 const clientSchema = z.object({
@@ -59,6 +59,10 @@ type ClientFormData = z.infer<typeof clientSchema>;
 export default function ClientsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [clients, setClients] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,6 +93,12 @@ export default function ClientsPage() {
     fetchClients();
   }, [fetchClients]);
   
+  const openNewForm = useCallback(() => {
+    setEditingClient(null);
+    // Form reset is handled by the useEffect below based on editingClient and isFormOpen
+    setIsFormOpen(true);
+  }, [setIsFormOpen, setEditingClient]);
+
   useEffect(() => {
     if (editingClient) {
       reset(editingClient);
@@ -96,6 +106,15 @@ export default function ClientsPage() {
       reset({ nome: "", email: "", telefone: "", endereco: "" });
     }
   }, [editingClient, reset, isFormOpen]);
+
+  useEffect(() => {
+    const shouldOpenModal = searchParams.get('openNewClient') === 'true';
+    if (shouldOpenModal) {
+      openNewForm();
+      // Remove the query parameter to prevent re-opening on refresh or back navigation
+      router.replace(pathname, { scroll: false });
+    }
+  }, [searchParams, openNewForm, router, pathname]);
 
 
   const onSubmit = async (data: ClientFormData) => {
@@ -137,11 +156,6 @@ export default function ClientsPage() {
     setEditingClient(client);
     setIsFormOpen(true);
   };
-
-  const openNewForm = () => {
-    setEditingClient(null);
-    setIsFormOpen(true);
-  }
 
   const filteredClients = clients.filter(client =>
     client.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -236,7 +250,7 @@ export default function ClientsPage() {
             </div>
           ) : filteredClients.length === 0 ? (
              <div className="text-center py-8">
-                <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" /> {/* Corrected Icon */}
                 <h3 className="text-xl font-semibold text-foreground">Nenhum cliente encontrado.</h3>
                 <p className="text-muted-foreground">
                   {searchTerm ? "Tente um termo de busca diferente." : "Comece adicionando seu primeiro cliente."}
