@@ -1,54 +1,104 @@
 
 "use client";
 
-import type { FichaTecnica, Cliente, Projeto, Circuito } from "@/types/firestore";
+import type { FichaTecnica, Cliente, Projeto, CircuitoFicha, Empresa, Usuario as AppUsuario } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, PlusCircle, NotebookText, Trash2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, NotebookText } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase/config";
-import { collection, addDoc, getDocs, query, where, Timestamp } from "firebase/firestore";
+import { db, storage } from "@/lib/firebase/config";
+import { collection, addDoc, getDocs, query, where, Timestamp, doc, getDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
+// Import new sectional components
+import FichaHeaderForm from "@/components/dashboard/technical-sheets/FichaHeaderForm";
+import CircuitosTableForm from "@/components/dashboard/technical-sheets/CircuitosTableForm";
+import ObsTecnicasForm from "@/components/dashboard/technical-sheets/ObsTecnicasForm";
+import QRCodeSectionForm from "@/components/dashboard/technical-sheets/QRCodeSectionForm";
+import AssinaturaContatoForm from "@/components/dashboard/technical-sheets/AssinaturaContatoForm";
+
 const circuitoSchema = z.object({
   nome: z.string().min(1, "Nome do circuito é obrigatório."),
-  descricao: z.string().min(3, "Descrição do circuito é obrigatória."),
+  disjuntor: z.string().min(1, "Disjuntor é obrigatório."),
+  caboMM: z.string().min(1, "Cabo (mm²) é obrigatório."),
+  observacoes: z.string().optional(),
 });
 
 const technicalSheetSchema = z.object({
   clienteId: z.string().min(1, "Selecione um cliente."),
   projetoId: z.string().min(1, "Selecione um projeto."),
-  descricao: z.string().min(5, "Descrição da ficha é obrigatória."),
+  
+  // Seção 1
+  tituloFicha: z.string().min(3, "Título da ficha é obrigatório."),
+  identificacaoLocal: z.string().min(1, "Local/Identificação é obrigatório."),
+  dataInstalacao: z.date({ required_error: "Data de instalação é obrigatória."}),
+  responsavelTecnico: z.string().min(3, "Responsável técnico é obrigatório."),
+  versaoFicha: z.string().default("v1.0"), // Will be set in onSubmit
+
+  // Seção 2
   circuitos: z.array(circuitoSchema).min(1, "Adicione pelo menos um circuito."),
+
+  // Seção 3
+  // observacaoNBR: z.string().optional(), // Fixed text, not really a form field
+  observacaoDR: z.boolean().default(false),
+  descricaoDROpcional: z.string().optional(),
+
+  // Seção 4 - Placeholders, not actively validated as input yet
+  // qrCodeUrl: z.string().url().optional(),
+  // textoAcessoOnline: z.string().optional(),
+  // linkFichaPublica: z.string().url().optional(),
+
+  // Seção 5
+  nomeEletricista: z.string().min(3, "Nome do eletricista é obrigatório."),
+  assinaturaEletricistaFile: z.custom<FileList>().optional(), // For upload
+  // assinaturaEletricistaUrl: z.string().url().optional(), // Stored URL
+  contatoEletricista: z.string().min(10, "Contato do eletricista é obrigatório."),
+  ramalPortaria: z.string().optional(),
 });
 
 type TechnicalSheetFormData = z.infer<typeof technicalSheetSchema>;
 
 export default function TechnicalSheetsPage() {
-  const { user } = useAuth();
+  const { user, userData } = useAuth(); // userData is AppUsuario
   const { toast } = useToast();
   const [clients, setClients] = useState<Cliente[]>([]);
   const [projects, setProjects] = useState<Projeto[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Projeto[]>([]);
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [assinaturaPreview, setAssinaturaPreview] = useState<string | null>(null);
+  const [assinaturaFile, setAssinaturaFile] = useState<File | undefined>(undefined);
 
-  const { control, handleSubmit, reset, watch, formState: { errors } } = useForm<TechnicalSheetFormData>({
+
+  const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<TechnicalSheetFormData>({
     resolver: zodResolver(technicalSheetSchema),
-    defaultValues: { clienteId: "", projetoId: "", descricao: "", circuitos: [{ nome: "", descricao: "" }] },
+    defaultValues: {
+      clienteId: "",
+      projetoId: "",
+      tituloFicha: "FICHA TÉCNICA – QUADRO DE DISTRIBUIÇÃO",
+      identificacaoLocal: "",
+      dataInstalacao: new Date(),
+      responsavelTecnico: userData?.nome || user?.displayName || "",
+      versaoFicha: "v1.0",
+      circuitos: [{ nome: "", disjuntor: "", caboMM: "", observacoes: "" }],
+      observacaoDR: false,
+      descricaoDROpcional: "",
+      nomeEletricista: userData?.nome || user?.displayName || "",
+      contatoEletricista: "",
+      ramalPortaria: "",
+    },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const circuitosFieldArray = useFieldArray({
     control,
     name: "circuitos",
   });
@@ -66,8 +116,15 @@ export default function TechnicalSheetsPage() {
       const projectQuery = query(collection(db, "projetos"), where("owner", "==", user.uid));
       const projectSnapshot = await getDocs(projectQuery);
       setProjects(projectSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Projeto)));
+
+      const empresaRef = doc(db, "empresas", user.uid);
+      const empresaSnap = await getDoc(empresaRef);
+      if (empresaSnap.exists()) {
+        setEmpresaData(empresaSnap.data() as Empresa);
+      }
+
     } catch (error) {
-      toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar clientes e projetos.", variant: "destructive" });
+      toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar clientes, projetos ou dados da empresa.", variant: "destructive" });
     } finally {
       setLoadingData(false);
     }
@@ -78,30 +135,84 @@ export default function TechnicalSheetsPage() {
   }, [fetchData]);
 
   useEffect(() => {
+    if (userData?.nome || user?.displayName) {
+        const nome = userData?.nome || user?.displayName || "";
+        setValue("responsavelTecnico", nome);
+        setValue("nomeEletricista", nome);
+    }
+  }, [user, userData, setValue]);
+
+  useEffect(() => {
     if (selectedClientId) {
       setFilteredProjects(projects.filter(p => p.clienteId === selectedClientId));
+      setValue("projetoId",""); // Reset project when client changes
     } else {
       setFilteredProjects([]);
     }
-     const currentProjectId = watch("projetoId");
-    if (currentProjectId && !projects.find(p => p.id === currentProjectId && p.clienteId === selectedClientId)) {
-        reset(prev => ({...prev, projetoId: ""}));
+  }, [selectedClientId, projects, setValue]);
+  
+  const handleAssinaturaChange = (file: File | undefined) => {
+    setAssinaturaFile(file);
+    if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setAssinaturaPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    } else {
+        setAssinaturaPreview(null);
     }
-  }, [selectedClientId, projects, watch, reset]);
+  };
+
 
   const onSubmit = async (data: TechnicalSheetFormData) => {
     if (!user) return;
     setLoading(true);
+
+    let assinaturaUrlFinal = "";
+    if (assinaturaFile) {
+      const storageRef = ref(storage, `fichasTecnicas/${user.uid}/${Timestamp.now().toMillis()}_${assinaturaFile.name}`);
+      try {
+        const snapshot = await uploadBytes(storageRef, assinaturaFile);
+        assinaturaUrlFinal = await getDownloadURL(snapshot.ref);
+      } catch (uploadError) {
+        toast({ title: "Erro no upload da assinatura", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+    }
+    
     try {
+      const { assinaturaEletricistaFile, ...formData } = data; // Exclude file from Firestore data
+
       const sheetData: Omit<FichaTecnica, 'id' | 'pdfUrl'> = {
-        ...data,
+        ...formData,
         owner: user.uid,
+        logotipoEmpresaUrl: empresaData?.logotipo || "",
+        nomeEmpresa: empresaData?.nome || "Não configurado",
+        dataInstalacao: Timestamp.fromDate(data.dataInstalacao),
+        versaoFicha: data.versaoFicha || "v1.0", // Ensure version is set
+        assinaturaEletricistaUrl: assinaturaUrlFinal,
+        observacaoNBR: "Conforme NBR 5410",
+        textoAcessoOnline: "Acesso aos projetos online",
+        // QR Code and public link are future features
+        qrCodeUrl: "", 
+        linkFichaPublica: "",
         dataCriacao: Timestamp.now(),
       };
       await addDoc(collection(db, "fichasTecnicas"), sheetData);
       toast({ title: "Ficha Técnica criada!", description: "A nova ficha técnica foi salva com sucesso." });
       reset(); 
+      setAssinaturaPreview(null);
+      setAssinaturaFile(undefined);
+      setValue("dataInstalacao", new Date()); // Reset date to today
+      setValue("circuitos", [{ nome: "", disjuntor: "", caboMM: "", observacoes: "" }]);
+      setValue("responsavelTecnico", userData?.nome || user?.displayName || "");
+      setValue("nomeEletricista", userData?.nome || user?.displayName || "");
+
+
     } catch (error) {
+      console.error("Error creating technical sheet:", error);
       toast({ title: "Erro ao criar ficha", description: "Não foi possível salvar a ficha técnica.", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -114,86 +225,70 @@ export default function TechnicalSheetsPage() {
         title="Geração de Fichas Técnicas"
         description="Crie fichas técnicas detalhadas para seus projetos."
       />
-       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Nova Ficha Técnica</CardTitle>
-          </CardHeader>
-          <CardContent>
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-2 space-y-6">
             {loadingData ? (
                  <div className="flex items-center justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Carregando dados...</p></div>
             ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="clienteId">Cliente</Label>
-                  <Controller name="clienteId" control={control} render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
-                      <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id!}>{c.nome}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )} />
-                  {errors.clienteId && <p className="text-sm text-destructive mt-1">{errors.clienteId.message}</p>}
-                </div>
-                <div>
-                  <Label htmlFor="projetoId">Projeto</Label>
-                  <Controller name="projetoId" control={control} render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClientId || filteredProjects.length === 0}>
-                      <SelectTrigger><SelectValue placeholder={!selectedClientId ? "Selecione um cliente" : "Selecione um projeto"} /></SelectTrigger>
-                      <SelectContent>{filteredProjects.map(p => <SelectItem key={p.id} value={p.id!}>{p.nome}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )} />
-                  {errors.projetoId && <p className="text-sm text-destructive mt-1">{errors.projetoId.message}</p>}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="descricao">Descrição Geral da Ficha</Label>
-                <Controller name="descricao" control={control} render={({ field }) => <Textarea id="descricao" {...field} placeholder="Ex: Ficha técnica do Apartamento 101, Bloco A" />} />
-                {errors.descricao && <p className="text-sm text-destructive mt-1">{errors.descricao.message}</p>}
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Circuitos</h3>
-                {fields.map((item, index) => (
-                  <Card key={item.id} className="p-4 bg-muted/50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
-                      <div>
-                        <Label htmlFor={`circuitos.${index}.nome`}>Nome do Circuito {index + 1}</Label>
-                        <Controller name={`circuitos.${index}.nome`} control={control} render={({ field }) => <Input {...field} placeholder="Ex: C1 - Tomadas Sala" />} />
-                        {errors.circuitos?.[index]?.nome && <p className="text-sm text-destructive mt-1">{errors.circuitos[index]?.nome?.message}</p>}
-                      </div>
-                       <div>
-                        <Label htmlFor={`circuitos.${index}.descricao`}>Descrição do Circuito {index + 1}</Label>
-                        <Controller name={`circuitos.${index}.descricao`} control={control} render={({ field }) => <Input {...field} placeholder="Ex: 5 Tomadas 2P+T 10A" />} />
-                        {errors.circuitos?.[index]?.descricao && <p className="text-sm text-destructive mt-1">{errors.circuitos[index]?.descricao?.message}</p>}
-                      </div>
+            <>
+            <Card>
+                <CardHeader><CardTitle>Dados Gerais</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                    <Label htmlFor="clienteId">Cliente</Label>
+                    <Controller name="clienteId" control={control} render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
+                        <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id!}>{c.nome}</SelectItem>)}</SelectContent>
+                        </Select>
+                    )} />
+                    {errors.clienteId && <p className="text-sm text-destructive mt-1">{errors.clienteId.message}</p>}
                     </div>
-                    <Button type="button" variant="destructive" size="sm" onClick={() => remove(index)}><Trash2 className="h-4 w-4 mr-1"/> Remover Circuito</Button>
-                  </Card>
-                ))}
-                 {errors.circuitos && typeof errors.circuitos === 'object' && 'message' in errors.circuitos && (
-                    <p className="text-sm text-destructive mt-1">{errors.circuitos.message}</p>
-                 )}
-                <Button type="button" variant="outline" onClick={() => append({ nome: "", descricao: "" })}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Circuito
-                </Button>
-              </div>
+                    <div>
+                    <Label htmlFor="projetoId">Projeto</Label>
+                    <Controller name="projetoId" control={control} render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClientId || filteredProjects.length === 0}>
+                        <SelectTrigger><SelectValue placeholder={!selectedClientId ? "Selecione um cliente" : "Selecione um projeto"} /></SelectTrigger>
+                        <SelectContent>{filteredProjects.map(p => <SelectItem key={p.id} value={p.id!}>{p.nome}</SelectItem>)}</SelectContent>
+                        </Select>
+                    )} />
+                    {errors.projetoId && <p className="text-sm text-destructive mt-1">{errors.projetoId.message}</p>}
+                    </div>
+                </CardContent>
+            </Card>
+
+            <FichaHeaderForm control={control} errors={errors} empresa={empresaData} user={userData} />
+            <CircuitosTableForm control={control} errors={errors} fieldArray={circuitosFieldArray} />
+            <ObsTecnicasForm control={control} errors={errors} />
+            <QRCodeSectionForm />
+            <AssinaturaContatoForm 
+                control={control} 
+                errors={errors} 
+                user={userData} 
+                setValue={setValue}
+                assinaturaPreview={assinaturaPreview}
+                onAssinaturaChange={handleAssinaturaChange}
+            />
               
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <NotebookText className="mr-2 h-4 w-4" />} Gerar Ficha Técnica
-              </Button>
-            </form>
+            <Button type="submit" disabled={loading || loadingData} className="w-full text-lg py-6">
+                {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <NotebookText className="mr-2 h-5 w-5" />} Gerar Ficha Técnica
+            </Button>
+            </>
             )}
-          </CardContent>
-        </Card>
-        <div className="space-y-6">
+        </form>
+        <div className="space-y-6 lg:col-span-1">
             <Card>
                 <CardHeader>
-                    <CardTitle>Exemplo de Ficha</CardTitle>
+                    <CardTitle>Exemplo de Ficha (Layout)</CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col items-center justify-center p-4 bg-muted rounded-md">
-                     <Image src="https://placehold.co/600x800.png" alt="Exemplo de Ficha Técnica" width={300} height={400} className="rounded shadow-md" data-ai-hint="document technical" />
+                <CardContent className="flex flex-col items-center justify-center p-2 bg-muted rounded-md">
+                     <Image 
+                        src="https://placehold.co/400x560.png?text=Layout+Ficha+T%C3%A9cnica" 
+                        alt="Exemplo de Layout da Ficha Técnica" 
+                        width={400} 
+                        height={560} 
+                        className="rounded shadow-md w-full max-w-sm"
+                        data-ai-hint="document layout" />
                      <p className="text-sm text-muted-foreground mt-2 text-center">A ficha técnica será gerada em PDF (funcionalidade futura).</p>
                 </CardContent>
             </Card>
@@ -202,3 +297,4 @@ export default function TechnicalSheetsPage() {
     </div>
   );
 }
+
