@@ -9,6 +9,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button"; // Added this import
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, isAdmin, loading } = useAuth();
