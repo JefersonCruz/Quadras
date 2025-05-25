@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
-import type { Contrato, Empresa, TestemunhaContrato } from "@/types/firestore";
+import type { Contrato, Empresa, TestemunhaContrato, ClienteContrato, EmpresaPrestadorContrato, BlocosEditaveisContrato } from "@/types/firestore";
 import { collection, addDoc, Timestamp, doc, getDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, FileSignature, User, Users, Building } from "lucide-react";
@@ -96,7 +96,6 @@ export default function NewContractPage() {
         } else {
            toast({ title: "Dados da Empresa Não Configurados", description: "Configure o perfil da sua empresa para preenchimento automático dos dados do prestador.", variant: "default", duration: 5000});
         }
-        // Set responsável técnico from user data if available, regardless of company profile
         if (userData?.nome) {
             setValue("empresaResponsavel", userData.nome, { shouldValidate: true });
         }
@@ -114,30 +113,55 @@ export default function NewContractPage() {
     setLoading(true);
 
     const testemunhasArray: TestemunhaContrato[] = [];
-    if (data.testemunha1Nome && data.testemunha1Email) {
+    if (data.testemunha1Nome && data.testemunha1Email && data.testemunha1Nome.trim() !== "" && data.testemunha1Email.trim() !== "") {
       testemunhasArray.push({ nome: data.testemunha1Nome, email: data.testemunha1Email });
     }
-    if (data.testemunha2Nome && data.testemunha2Email) {
+    if (data.testemunha2Nome && data.testemunha2Email && data.testemunha2Nome.trim() !== "" && data.testemunha2Email.trim() !== "") {
       testemunhasArray.push({ nome: data.testemunha2Nome, email: data.testemunha2Email });
     }
 
-    const newContract: Partial<Contrato> = { // Use Partial initially
+    const clientePayload: ClienteContrato = {
+      nome: data.clienteNome,
+      email: data.clienteEmail,
+    };
+    if (data.clienteCpfCnpj && data.clienteCpfCnpj.trim() !== "") {
+      clientePayload.cpfCnpj = data.clienteCpfCnpj;
+    }
+
+    const blocosEditaveisPayload: BlocosEditaveisContrato = {
+      objetoDoContrato: data.objetoDoContrato,
+      prazoDeExecucao: data.prazoDeExecucao,
+      condicoesDePagamento: data.condicoesDePagamento,
+      fornecimentoDeMateriais: data.fornecimentoDeMateriais,
+      multasPenalidades: data.multasPenalidades,
+      cancelamento: data.cancelamento,
+    };
+    if (data.foro && data.foro.trim() !== "") {
+      blocosEditaveisPayload.foro = data.foro;
+    }
+    
+    const empresaPrestadorPayload: EmpresaPrestadorContrato = {
+        nome: empresaUsuario?.nome || data.empresaNome || "Empresa não informada",
+    };
+    const formEmpresaCnpj = empresaUsuario?.cnpj || data.empresaCnpj;
+    if (formEmpresaCnpj && formEmpresaCnpj.trim() !== "") {
+        empresaPrestadorPayload.cnpj = formEmpresaCnpj;
+    }
+    const formEmpresaEndereco = empresaUsuario?.endereco || data.empresaEndereco;
+    if (formEmpresaEndereco && formEmpresaEndereco.trim() !== "") {
+        empresaPrestadorPayload.endereco = formEmpresaEndereco;
+    }
+    const formEmpresaResponsavel = data.empresaResponsavel || userData?.nome;
+    if (formEmpresaResponsavel && formEmpresaResponsavel.trim() !== "") {
+        empresaPrestadorPayload.responsavelTecnico = formEmpresaResponsavel;
+    }
+
+
+    const newContractData: Omit<Contrato, 'id'> = {
       createdBy: user.uid,
       tipo: data.tipo,
-      cliente: {
-        nome: data.clienteNome,
-        email: data.clienteEmail,
-        cpfCnpj: data.clienteCpfCnpj || undefined,
-      },
-      blocosEditaveis: {
-        objetoDoContrato: data.objetoDoContrato,
-        prazoDeExecucao: data.prazoDeExecucao,
-        condicoesDePagamento: data.condicoesDePagamento,
-        fornecimentoDeMateriais: data.fornecimentoDeMateriais,
-        multasPenalidades: data.multasPenalidades,
-        cancelamento: data.cancelamento,
-        foro: data.foro || undefined,
-      },
+      cliente: clientePayload,
+      blocosEditaveis: blocosEditaveisPayload,
       status: 'rascunho', 
       assinaturas: { 
         prestador: undefined,
@@ -147,25 +171,20 @@ export default function NewContractPage() {
       },
       dataCriacao: Timestamp.now(),
       dataUltimaModificacao: Timestamp.now(),
-      empresaPrestador: {
-        nome: empresaUsuario?.nome || data.empresaNome || "Empresa não informada",
-        cnpj: empresaUsuario?.cnpj || data.empresaCnpj || undefined,
-        endereco: empresaUsuario?.endereco || data.empresaEndereco || undefined,
-        responsavelTecnico: data.empresaResponsavel || userData?.nome || undefined,
-      },
+      empresaPrestador: empresaPrestadorPayload,
     };
 
     if (testemunhasArray.length > 0) {
-      newContract.testemunhas = testemunhasArray;
+      newContractData.testemunhas = testemunhasArray;
     }
 
     if (data.tipo === 'emergencial') {
-        newContract.taxaDeslocamento = 100.00; // Example, make configurable later
-        newContract.termosEmergencial = "Para atendimentos emergenciais, aplica-se uma taxa de deslocamento de R$100,00. O aceite destes termos implica na concordância do pagamento da referida taxa, mesmo que o serviço não seja executado por decisão do cliente após a chegada do técnico, ou caso o técnico já esteja a caminho e o chamado seja cancelado. O valor do serviço será orçado no local antes da execução.";
+        newContractData.taxaDeslocamento = 100.00; 
+        newContractData.termosEmergencial = "Para atendimentos emergenciais, aplica-se uma taxa de deslocamento de R$100,00. O aceite destes termos implica na concordância do pagamento da referida taxa, mesmo que o serviço não seja executado por decisão do cliente após a chegada do técnico, ou caso o técnico já esteja a caminho e o chamado seja cancelado. O valor do serviço será orçado no local antes da execução.";
     }
 
     try {
-      await addDoc(collection(db, "contratos"), newContract as Contrato); // Cast to Contrato
+      await addDoc(collection(db, "contratos"), newContractData); 
       toast({ title: "Contrato criado!", description: "O novo contrato foi salvo como rascunho." });
       router.push("/dashboard/contracts");
     } catch (error) {
