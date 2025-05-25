@@ -13,6 +13,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Empresa, Usuario } from "@/types/firestore";
 import Image from "next/image";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
+import { cn } from "@/lib/utils";
 
 interface FichaHeaderFormProps {
   control: Control<any>;
@@ -28,26 +30,37 @@ export default function FichaHeaderForm({ control, errors, empresa, user }: Fich
         <CardTitle>1. Cabeçalho e Identificação</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <Label>Logotipo da Empresa</Label>
-                {empresa?.logotipo ? (
-                    <div className="mt-2 w-32 h-32 border rounded-md flex items-center justify-center overflow-hidden bg-muted">
-                        <Image src={empresa.logotipo} alt="Logotipo da Empresa" width={128} height={128} className="object-contain" data-ai-hint="logo company" />
-                    </div>
-                ) : (
-                    <p className="text-sm text-muted-foreground mt-1">Configure o logotipo no <a href="/dashboard/company" className="underline text-primary">Perfil da Empresa</a>.</p>
-                )}
-            </div>
-            <div>
-                <Label>Nome da Empresa</Label>
-                <Input
-                    value={empresa?.nome || "Configure no Perfil da Empresa"}
-                    disabled
-                    className="mt-1"
-                />
-            </div>
+        {/* Logo and Company Name Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start mb-6 pb-4 border-b">
+          <div className="md:col-span-1">
+            <Label className="block mb-1 text-xs text-muted-foreground">Logotipo:</Label>
+            {empresa?.logotipo ? (
+              <div className="mt-1 w-24 h-24 border rounded-md flex items-center justify-center overflow-hidden bg-muted shadow-sm p-1">
+                <Image src={empresa.logotipo} alt="Logotipo da Empresa" width={96} height={96} className="object-contain" data-ai-hint="logo company" />
+              </div>
+            ) : (
+              <div className="mt-1 w-24 h-24 border rounded-md flex items-center justify-center bg-muted/30 text-xs text-muted-foreground p-2 text-center shadow-sm">
+                Sem logotipo. Configure no Perfil da Empresa.
+              </div>
+            )}
+          </div>
+          <div className="md:col-span-2">
+            <Label htmlFor="displayNomeEmpresa" className="block mb-1 text-xs text-muted-foreground">Empresa:</Label>
+            <Input
+              id="displayNomeEmpresa"
+              value={empresa?.nome || "Nome da Empresa não configurado"}
+              disabled
+              className="mt-1 text-lg font-semibold bg-muted/30"
+            />
+            {!empresa?.nome && (
+                 <p className="text-xs text-muted-foreground mt-1">
+                    Visite <a href="/dashboard/company" className="underline text-primary hover:text-primary/80">Perfil da Empresa</a> para adicionar.
+                </p>
+            )}
+          </div>
         </div>
+        {/* End Logo and Company Name Section */}
+
         <div>
           <Label htmlFor="tituloFicha">Título da Ficha</Label>
           <Controller
@@ -76,7 +89,7 @@ export default function FichaHeaderForm({ control, errors, empresa, user }: Fich
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
-                    className={`w-full justify-start text-left font-normal ${!field.value && "text-muted-foreground"}`}
+                    className={cn("w-full justify-start text-left font-normal",!field.value && "text-muted-foreground")}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
@@ -118,15 +131,4 @@ export default function FichaHeaderForm({ control, errors, empresa, user }: Fich
       </CardContent>
     </Card>
   );
-}
-
-// Dummy Card components if not globally available or for isolation
-const Card: React.FC<{className?: string, children: React.ReactNode}> = ({ className, children }) => <div className={cn("border rounded-lg shadow-sm bg-card text-card-foreground", className)}>{children}</div>;
-const CardHeader: React.FC<{children: React.ReactNode}> = ({ children }) => <div className="p-6 flex flex-col space-y-1.5">{children}</div>;
-const CardTitle: React.FC<{children: React.ReactNode}> = ({ children }) => <h3 className="text-2xl font-semibold leading-none tracking-tight">{children}</h3>;
-const CardContent: React.FC<{className?: string, children: React.ReactNode}> = ({ className, children }) => <div className={cn("p-6 pt-0", className)}>{children}</div>;
-
-// cn utility if not globally available
-function cn(...inputs: any[]): string {
-  return inputs.filter(Boolean).join(' ');
 }
