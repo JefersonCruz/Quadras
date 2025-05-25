@@ -5,7 +5,7 @@ import type { FichaTecnica, Cliente, Projeto, CircuitoFicha, Empresa, Usuario as
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, NotebookText } from "lucide-react";
+import { Loader2, NotebookText, Download, Share2, FileText, Image as ImageIcon } from "lucide-react"; // Added Download, Share2, FileText, ImageIcon
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -98,6 +98,7 @@ export default function TechnicalSheetsPage() {
   });
 
   const selectedClientId = watch("clienteId");
+  const fichaLayoutImageUrl = "https://placehold.co/400x560.png?text=Layout+Ficha+T%C3%A9cnica";
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -212,6 +213,18 @@ export default function TechnicalSheetsPage() {
     }
   };
 
+  const handleDownloadPng = () => {
+    // This is a simplified download for the placeholder image.
+    // A real implementation would capture the form content as an image.
+    const link = document.createElement('a');
+    link.href = fichaLayoutImageUrl;
+    link.download = 'layout-ficha-tecnica.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Download PNG", description: "Baixando imagem de exemplo do layout." });
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -274,15 +287,26 @@ export default function TechnicalSheetsPage() {
                 <CardHeader>
                     <CardTitle>Exemplo de Ficha (Layout)</CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col items-center justify-center p-2 bg-muted rounded-md">
+                <CardContent className="flex flex-col items-center justify-center p-4 bg-muted rounded-md">
                      <Image 
-                        src="https://placehold.co/400x560.png?text=Layout+Ficha+T%C3%A9cnica" 
+                        src={fichaLayoutImageUrl}
                         alt="Exemplo de Layout da Ficha Técnica" 
                         width={400} 
                         height={560} 
                         className="rounded shadow-md w-full max-w-sm"
                         data-ai-hint="document layout" />
                      <p className="text-sm text-muted-foreground mt-2 text-center">A ficha técnica será gerada em PDF (funcionalidade futura).</p>
+                     <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                        <Button onClick={handleDownloadPng} variant="outline" size="sm">
+                            <ImageIcon className="mr-2 h-4 w-4" /> Baixar PNG (Exemplo)
+                        </Button>
+                        <Button disabled variant="outline" size="sm" title="Gerar PDF (em breve)">
+                            <FileText className="mr-2 h-4 w-4" /> Baixar PDF
+                        </Button>
+                        <Button disabled variant="outline" size="sm" title="Compartilhar (em breve)">
+                            <Share2 className="mr-2 h-4 w-4" /> Compartilhar
+                        </Button>
+                     </div>
                 </CardContent>
             </Card>
         </div>
@@ -290,3 +314,6 @@ export default function TechnicalSheetsPage() {
     </div>
   );
 }
+
+
+    
