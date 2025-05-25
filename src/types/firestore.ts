@@ -115,18 +115,16 @@ export interface BlocosEditaveisContrato {
   multasPenalidades: string;
   cancelamento: string;
   foro?: string; // Optional: foro para dirimir conflitos
-  // Add more editable blocks as needed
 }
 
 export interface AssinaturaDetalhes {
-  assinanteUid?: string; // UID do usuário Firebase que assinou (se aplicável)
-  nome?: string; // Nome do assinante (especialmente para cliente/testemunhas sem conta)
-  email?: string; // Email do assinante
+  assinanteUid?: string; 
+  nome?: string; 
+  email?: string; 
   ip?: string;
   dataHora?: Timestamp;
-  canalAcesso?: 'email' | 'whatsapp' | 'plataforma'; // Como o link de assinatura foi acessado
+  canalAcesso?: 'email' | 'whatsapp' | 'plataforma'; 
   userAgent?: string;
-  // Outros metadados da assinatura
 }
 
 export interface AssinaturasContrato {
@@ -136,30 +134,30 @@ export interface AssinaturasContrato {
   testemunha2?: AssinaturaDetalhes;
 }
 
+export interface EmpresaPrestadorContrato {
+    nome: string;
+    cnpj?: string;
+    endereco?: string;
+    responsavelTecnico?: string;
+}
+
 export interface Contrato {
   id?: string;
-  createdBy: string; // UID do prestador de serviço
+  createdBy: string; 
   tipo: 'padrão' | 'emergencial';
   cliente: ClienteContrato;
-  testemunhas?: TestemunhaContrato[]; // Array para 0, 1 ou 2 testemunhas
+  testemunhas?: TestemunhaContrato[]; 
   blocosEditaveis: BlocosEditaveisContrato;
   status: 'rascunho' | 'pendente_assinaturas' | 'parcialmente_assinado' | 'assinado' | 'cancelado';
   assinaturas: AssinaturasContrato;
-  pdfUrl?: string; // URL do PDF gerado e salvo no Firebase Storage
+  pdfUrl?: string; 
   dataCriacao: Timestamp;
   dataUltimaModificacao?: Timestamp;
   dataEnvioAssinaturas?: Timestamp;
   dataFinalizacaoAssinaturas?: Timestamp;
-  // Campos da empresa do prestador (podem ser preenchidos no momento da criação)
-  empresaPrestador?: {
-    nome: string;
-    cnpj: string;
-    endereco: string;
-    responsavelTecnico?: string;
-  };
-  // Campos adicionais para contrato emergencial
+  empresaPrestador?: EmpresaPrestadorContrato;
   taxaDeslocamento?: number;
-  termosEmergencial?: string; // Cláusulas específicas para emergência
+  termosEmergencial?: string; 
 }
 
 

@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
-import type { Contrato, Empresa } from "@/types/firestore";
+import type { Contrato, Empresa, TestemunhaContrato } from "@/types/firestore";
 import { collection, addDoc, Timestamp, doc, getDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, FileSignature, User, Users, Building } from "lucide-react";
@@ -41,11 +41,11 @@ const contractSchema = z.object({
   cancelamento: z.string().min(5, "Informação sobre cancelamento é obrigatória."),
   foro: z.string().optional(),
 
-  // Campos da empresa (serão preenchidos automaticamente no futuro)
-  empresaNome: z.string().optional(),
-  empresaCnpj: z.string().optional(),
-  empresaEndereco: z.string().optional(),
-  empresaResponsavel: z.string().optional(),
+  // Campos da empresa (preenchidos automaticamente e um editável)
+  empresaNome: z.string().optional(), // Display only
+  empresaCnpj: z.string().optional(), // Display only
+  empresaEndereco: z.string().optional(), // Display only
+  empresaResponsavel: z.string().min(3, "Responsável da empresa é obrigatório.").optional(),
 });
 
 type ContractFormData = z.infer<typeof contractSchema>;
@@ -68,13 +68,13 @@ export default function NewContractPage() {
       testemunha1Email: "",
       testemunha2Nome: "",
       testemunha2Email: "",
-      objetoDoContrato: "Prestação de serviços de ",
-      prazoDeExecucao: "A ser definido",
-      condicoesDePagamento: "Pagamento de 50% na aprovação e 50% na conclusão.",
-      fornecimentoDeMateriais: "Materiais serão fornecidos pelo CONTRATADO, com custos repassados ao CONTRATANTE mediante nota fiscal.",
-      multasPenalidades: "Multa de 10% sobre o valor do contrato em caso de descumprimento de qualquer cláusula.",
-      cancelamento: "Cancelamento com aviso prévio de 30 dias, sujeito a multa rescisória.",
-      foro: "Fica eleito o foro da comarca de [Cidade]/[UF] para dirimir quaisquer controvérsias oriundas do presente contrato.",
+      objetoDoContrato: "Prestação de serviços de instalação e manutenção elétrica, incluindo, mas não se limitando a: [Descrever os serviços].",
+      prazoDeExecucao: "O serviço será executado em [Número] dias úteis a contar da data de assinatura deste contrato, ou conforme cronograma a ser acordado entre as partes.",
+      condicoesDePagamento: "O pagamento será realizado da seguinte forma: 50% (cinquenta por cento) do valor total no ato da assinatura deste contrato, a título de sinal, e os 50% (cinquenta por cento) restantes após a conclusão e aprovação dos serviços. Formas de pagamento aceitas: [Pix, Transferência Bancária, etc.].",
+      fornecimentoDeMateriais: "Os materiais necessários para a execução dos serviços serão fornecidos pelo CONTRATADO, e seus custos serão discriminados e repassados ao CONTRATANTE, mediante apresentação de notas fiscais, ou [outra condição].",
+      multasPenalidades: "Em caso de descumprimento de quaisquer cláusulas deste contrato por qualquer das partes, incidirá multa de 10% (dez por cento) sobre o valor total do contrato, sem prejuízo de eventuais perdas e danos.",
+      cancelamento: "Qualquer das partes poderá rescindir o presente contrato mediante aviso prévio de 30 (trinta) dias. Em caso de rescisão imotivada pelo CONTRATANTE, este arcará com os custos dos serviços já executados e materiais adquiridos até a data da rescisão, acrescido de multa rescisória de [Percentual]% sobre o valor remanescente do contrato.",
+      foro: "Fica eleito o foro da comarca de [Cidade da Empresa Prestadora]/[UF] para dirimir quaisquer controvérsias oriundas do presente contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.",
       empresaNome: "",
       empresaCnpj: "",
       empresaEndereco: "",
@@ -90,14 +90,15 @@ export default function NewContractPage() {
         if (docSnap.exists()) {
           const empresa = docSnap.data() as Empresa;
           setEmpresaUsuario(empresa);
-          setValue("empresaNome", empresa.nome);
-          setValue("empresaCnpj", empresa.cnpj);
-          setValue("empresaEndereco", empresa.endereco);
-          if (userData?.nome) {
-            setValue("empresaResponsavel", userData.nome);
-          }
+          setValue("empresaNome", empresa.nome || "Não configurado");
+          setValue("empresaCnpj", empresa.cnpj || "Não configurado");
+          setValue("empresaEndereco", empresa.endereco || "Não configurado");
         } else {
-           toast({ title: "Dados da Empresa Não Encontrados", description: "Configure o perfil da sua empresa para preenchimento automático.", variant: "default"});
+           toast({ title: "Dados da Empresa Não Configurados", description: "Configure o perfil da sua empresa para preenchimento automático dos dados do prestador.", variant: "default", duration: 5000});
+        }
+        // Set responsável técnico from user data if available, regardless of company profile
+        if (userData?.nome) {
+            setValue("empresaResponsavel", userData.nome, { shouldValidate: true });
         }
       }
     };
@@ -120,15 +121,14 @@ export default function NewContractPage() {
       testemunhasArray.push({ nome: data.testemunha2Nome, email: data.testemunha2Email });
     }
 
-    const newContract: Contrato = {
+    const newContract: Partial<Contrato> = { // Use Partial initially
       createdBy: user.uid,
       tipo: data.tipo,
       cliente: {
         nome: data.clienteNome,
         email: data.clienteEmail,
-        cpfCnpj: data.clienteCpfCnpj,
+        cpfCnpj: data.clienteCpfCnpj || undefined,
       },
-      testemunhas: testemunhasArray.length > 0 ? testemunhasArray : undefined,
       blocosEditaveis: {
         objetoDoContrato: data.objetoDoContrato,
         prazoDeExecucao: data.prazoDeExecucao,
@@ -138,8 +138,8 @@ export default function NewContractPage() {
         cancelamento: data.cancelamento,
         foro: data.foro || undefined,
       },
-      status: 'rascunho', // Initial status
-      assinaturas: { // Initialize signature placeholders
+      status: 'rascunho', 
+      assinaturas: { 
         prestador: undefined,
         cliente: undefined,
         testemunha1: undefined,
@@ -147,21 +147,25 @@ export default function NewContractPage() {
       },
       dataCriacao: Timestamp.now(),
       dataUltimaModificacao: Timestamp.now(),
-      empresaPrestador: empresaUsuario ? {
-        nome: empresaUsuario.nome,
-        cnpj: empresaUsuario.cnpj,
-        endereco: empresaUsuario.endereco,
-        responsavelTecnico: userData?.nome || empresaUsuario.owner, // or some other field
-      } : undefined,
+      empresaPrestador: {
+        nome: empresaUsuario?.nome || data.empresaNome || "Empresa não informada",
+        cnpj: empresaUsuario?.cnpj || data.empresaCnpj || undefined,
+        endereco: empresaUsuario?.endereco || data.empresaEndereco || undefined,
+        responsavelTecnico: data.empresaResponsavel || userData?.nome || undefined,
+      },
     };
+
+    if (testemunhasArray.length > 0) {
+      newContract.testemunhas = testemunhasArray;
+    }
 
     if (data.tipo === 'emergencial') {
         newContract.taxaDeslocamento = 100.00; // Example, make configurable later
-        newContract.termosEmergencial = "Atendimento emergencial sujeito a taxa de deslocamento e pagamento obrigatório se técnico a caminho.";
+        newContract.termosEmergencial = "Para atendimentos emergenciais, aplica-se uma taxa de deslocamento de R$100,00. O aceite destes termos implica na concordância do pagamento da referida taxa, mesmo que o serviço não seja executado por decisão do cliente após a chegada do técnico, ou caso o técnico já esteja a caminho e o chamado seja cancelado. O valor do serviço será orçado no local antes da execução.";
     }
 
     try {
-      await addDoc(collection(db, "contratos"), newContract);
+      await addDoc(collection(db, "contratos"), newContract as Contrato); // Cast to Contrato
       toast({ title: "Contrato criado!", description: "O novo contrato foi salvo como rascunho." });
       router.push("/dashboard/contracts");
     } catch (error) {
@@ -182,38 +186,37 @@ export default function NewContractPage() {
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {/* Detalhes da Empresa do Prestador - Auto-preenchido (somente display por enquanto) */}
+            
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><Building className="mr-2 h-5 w-5 text-primary"/> Dados da Sua Empresa (Prestador)</CardTitle>
-                <CardDescription>Estes dados são do seu perfil de empresa. Serão incluídos no contrato.</CardDescription>
+                <CardDescription>Estes dados são do seu perfil de empresa ou preenchidos com base no seu usuário. Serão incluídos no contrato.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
                   <Label>Nome da Empresa</Label>
-                  <Input value={empresaUsuario?.nome || "Carregando..."} disabled />
+                  <Controller name="empresaNome" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                 <div>
                   <Label>CNPJ</Label>
-                  <Input value={empresaUsuario?.cnpj || "Carregando..."} disabled />
+                  <Controller name="empresaCnpj" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                 <div>
-                  <Label>Endereço</Label>
-                  <Input value={empresaUsuario?.endereco || "Carregando..."} disabled />
+                  <Label>Endereço da Empresa</Label>
+                  <Controller name="empresaEndereco" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                  <div>
-                  <Label>Responsável Técnico (Sua Empresa)</Label>
+                  <Label htmlFor="empresaResponsavel">Responsável Técnico (Sua Empresa)</Label>
                    <Controller
                     name="empresaResponsavel"
                     control={control}
-                    render={({ field }) => <Input {...field} placeholder="Seu nome como responsável" />}
+                    render={({ field }) => <Input id="empresaResponsavel" {...field} placeholder="Seu nome como responsável" />}
                   />
                   {errors.empresaResponsavel && <p className="text-sm text-destructive mt-1">{errors.empresaResponsavel.message}</p>}
                 </div>
               </CardContent>
             </Card>
             
-            {/* Dados do Cliente */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><User className="mr-2 h-5 w-5 text-primary"/> Dados do Cliente</CardTitle>
@@ -237,13 +240,13 @@ export default function NewContractPage() {
               </CardContent>
             </Card>
 
-            {/* Dados das Testemunhas */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><Users className="mr-2 h-5 w-5 text-primary"/> Dados das Testemunhas (Opcional)</CardTitle>
+                <CardDescription>Informe os dados de até duas testemunhas para o contrato.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4 mb-4">
                   <div>
                     <Label htmlFor="testemunha1Nome">Nome da Testemunha 1</Label>
                     <Controller name="testemunha1Nome" control={control} render={({ field }) => <Input id="testemunha1Nome" {...field} />} />
@@ -270,10 +273,10 @@ export default function NewContractPage() {
               </CardContent>
             </Card>
 
-            {/* Blocos Editáveis do Contrato */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center"><FileSignature className="mr-2 h-5 w-5 text-primary"/> Cláusulas do Contrato</CardTitle>
+                <CardTitle className="flex items-center"><FileSignature className="mr-2 h-5 w-5 text-primary"/> Cláusulas Editáveis do Contrato</CardTitle>
+                <CardDescription>Ajuste as cláusulas conforme necessário. Os textos padrão servem como base.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -283,7 +286,7 @@ export default function NewContractPage() {
                 </div>
                 <div>
                   <Label htmlFor="prazoDeExecucao">Prazo de Execução</Label>
-                  <Controller name="prazoDeExecucao" control={control} render={({ field }) => <Input id="prazoDeExecucao" {...field} />} />
+                  <Controller name="prazoDeExecucao" control={control} render={({ field }) => <Textarea id="prazoDeExecucao" {...field} rows={2} />} />
                   {errors.prazoDeExecucao && <p className="text-sm text-destructive mt-1">{errors.prazoDeExecucao.message}</p>}
                 </div>
                 <div>
@@ -302,7 +305,7 @@ export default function NewContractPage() {
                   {errors.multasPenalidades && <p className="text-sm text-destructive mt-1">{errors.multasPenalidades.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="cancelamento">Cancelamento</Label>
+                  <Label htmlFor="cancelamento">Cancelamento e Rescisão</Label>
                   <Controller name="cancelamento" control={control} render={({ field }) => <Textarea id="cancelamento" {...field} rows={3} />} />
                   {errors.cancelamento && <p className="text-sm text-destructive mt-1">{errors.cancelamento.message}</p>}
                 </div>
@@ -315,7 +318,6 @@ export default function NewContractPage() {
             </Card>
           </div>
 
-          {/* Sidebar com tipo de contrato e ações */}
           <div className="lg:col-span-1 space-y-6">
             <Card>
               <CardHeader>
