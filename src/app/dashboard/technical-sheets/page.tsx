@@ -17,6 +17,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
+import { Label } from "@/components/ui/label"; // Added missing import
 
 // Import new sectional components
 import FichaHeaderForm from "@/components/dashboard/technical-sheets/FichaHeaderForm";
@@ -298,3 +299,4 @@ export default function TechnicalSheetsPage() {
   );
 }
 
+    
