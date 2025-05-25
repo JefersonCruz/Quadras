@@ -17,7 +17,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
-import { Label } from "@/components/ui/label"; // Added missing import
+import { Label } from "@/components/ui/label";
 
 // Import new sectional components
 import FichaHeaderForm from "@/components/dashboard/technical-sheets/FichaHeaderForm";
@@ -42,25 +42,18 @@ const technicalSheetSchema = z.object({
   identificacaoLocal: z.string().min(1, "Local/Identificação é obrigatório."),
   dataInstalacao: z.date({ required_error: "Data de instalação é obrigatória."}),
   responsavelTecnico: z.string().min(3, "Responsável técnico é obrigatório."),
-  versaoFicha: z.string().default("v1.0"), // Will be set in onSubmit
+  versaoFicha: z.string().default("v1.0"), 
 
   // Seção 2
   circuitos: z.array(circuitoSchema).min(1, "Adicione pelo menos um circuito."),
 
   // Seção 3
-  // observacaoNBR: z.string().optional(), // Fixed text, not really a form field
   observacaoDR: z.boolean().default(false),
   descricaoDROpcional: z.string().optional(),
 
-  // Seção 4 - Placeholders, not actively validated as input yet
-  // qrCodeUrl: z.string().url().optional(),
-  // textoAcessoOnline: z.string().optional(),
-  // linkFichaPublica: z.string().url().optional(),
-
   // Seção 5
   nomeEletricista: z.string().min(3, "Nome do eletricista é obrigatório."),
-  assinaturaEletricistaFile: z.custom<FileList>().optional(), // For upload
-  // assinaturaEletricistaUrl: z.string().url().optional(), // Stored URL
+  assinaturaEletricistaFile: z.custom<FileList>().optional(), 
   contatoEletricista: z.string().min(10, "Contato do eletricista é obrigatório."),
   ramalPortaria: z.string().optional(),
 });
@@ -68,7 +61,7 @@ const technicalSheetSchema = z.object({
 type TechnicalSheetFormData = z.infer<typeof technicalSheetSchema>;
 
 export default function TechnicalSheetsPage() {
-  const { user, userData } = useAuth(); // userData is AppUsuario
+  const { user, userData } = useAuth(); 
   const { toast } = useToast();
   const [clients, setClients] = useState<Cliente[]>([]);
   const [projects, setProjects] = useState<Projeto[]>([]);
@@ -90,7 +83,7 @@ export default function TechnicalSheetsPage() {
       dataInstalacao: new Date(),
       responsavelTecnico: userData?.nome || user?.displayName || "",
       versaoFicha: "v1.0",
-      circuitos: [{ nome: "", disjuntor: "", caboMM: "", observacoes: "" }],
+      circuitos: [], // Start with an empty array, template selector will populate
       observacaoDR: false,
       descricaoDROpcional: "",
       nomeEletricista: userData?.nome || user?.displayName || "",
@@ -146,7 +139,7 @@ export default function TechnicalSheetsPage() {
   useEffect(() => {
     if (selectedClientId) {
       setFilteredProjects(projects.filter(p => p.clienteId === selectedClientId));
-      setValue("projetoId",""); // Reset project when client changes
+      setValue("projetoId",""); 
     } else {
       setFilteredProjects([]);
     }
@@ -184,7 +177,7 @@ export default function TechnicalSheetsPage() {
     }
     
     try {
-      const { assinaturaEletricistaFile, ...formData } = data; // Exclude file from Firestore data
+      const { assinaturaEletricistaFile, ...formData } = data; 
 
       const sheetData: Omit<FichaTecnica, 'id' | 'pdfUrl'> = {
         ...formData,
@@ -192,11 +185,10 @@ export default function TechnicalSheetsPage() {
         logotipoEmpresaUrl: empresaData?.logotipo || "",
         nomeEmpresa: empresaData?.nome || "Não configurado",
         dataInstalacao: Timestamp.fromDate(data.dataInstalacao),
-        versaoFicha: data.versaoFicha || "v1.0", // Ensure version is set
+        versaoFicha: data.versaoFicha || "v1.0", 
         assinaturaEletricistaUrl: assinaturaUrlFinal,
         observacaoNBR: "Conforme NBR 5410",
         textoAcessoOnline: "Acesso aos projetos online",
-        // QR Code and public link are future features
         qrCodeUrl: "", 
         linkFichaPublica: "",
         dataCriacao: Timestamp.now(),
@@ -206,8 +198,8 @@ export default function TechnicalSheetsPage() {
       reset(); 
       setAssinaturaPreview(null);
       setAssinaturaFile(undefined);
-      setValue("dataInstalacao", new Date()); // Reset date to today
-      setValue("circuitos", [{ nome: "", disjuntor: "", caboMM: "", observacoes: "" }]);
+      setValue("dataInstalacao", new Date()); 
+      setValue("circuitos", []); // Reset circuitos to empty
       setValue("responsavelTecnico", userData?.nome || user?.displayName || "");
       setValue("nomeEletricista", userData?.nome || user?.displayName || "");
 
@@ -233,7 +225,7 @@ export default function TechnicalSheetsPage() {
             ) : (
             <>
             <Card>
-                <CardHeader><CardTitle>Dados Gerais</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Dados Gerais do Projeto/Cliente</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                     <Label htmlFor="clienteId">Cliente</Label>
@@ -259,7 +251,7 @@ export default function TechnicalSheetsPage() {
             </Card>
 
             <FichaHeaderForm control={control} errors={errors} empresa={empresaData} user={userData} />
-            <CircuitosTableForm control={control} errors={errors} fieldArray={circuitosFieldArray} />
+            <CircuitosTableForm control={control} errors={errors} fieldArray={circuitosFieldArray} setValue={setValue} />
             <ObsTecnicasForm control={control} errors={errors} />
             <QRCodeSectionForm />
             <AssinaturaContatoForm 
@@ -298,5 +290,3 @@ export default function TechnicalSheetsPage() {
     </div>
   );
 }
-
-    
