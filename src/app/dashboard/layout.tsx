@@ -9,6 +9,8 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Loader2 } from "lucide-react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"; // Using custom sidebar provider
+import ClientOnly from "@/components/shared/ClientOnly";
+import { AppSidebarSkeleton } from "@/components/layout/AppSidebarSkeleton";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -30,7 +32,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <AppSidebar />
+      <ClientOnly fallback={<AppSidebarSkeleton />}>
+        <AppSidebar />
+      </ClientOnly>
       <SidebarInset>
         <AppHeader />
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
