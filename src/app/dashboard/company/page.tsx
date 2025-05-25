@@ -22,13 +22,13 @@ import Image from "next/image";
 const companySchema = z.object({
   nome: z.string().min(3, "Nome da empresa é obrigatório."),
   cnpj: z.string().min(14, "CNPJ deve ter 14 dígitos.").max(18, "CNPJ inválido.").optional().or(z.literal('')),
-  email: z.string().email("Email inválido.").optional().or(z.literal('')), // Optional email
+  email: z.string().email("Email inválido.").optional().or(z.literal('')),
   telefone: z.string().min(10, "Telefone inválido.").optional().or(z.literal('')),
-  endereco: z.string().optional(),
+  endereco: z.string().optional().or(z.literal('')),
   site: z.string().url("URL do site inválida.").optional().or(z.literal('')),
-  instagram: z.string().optional(),
-  facebook: z.string().optional(),
-  whatsapp: z.string().optional(),
+  instagram: z.string().optional().or(z.literal('')),
+  facebook: z.string().optional().or(z.literal('')),
+  whatsapp: z.string().optional().or(z.literal('')),
   logotipoFile: z.custom<FileList>().optional(),
 });
 
@@ -45,6 +45,18 @@ export default function CompanyProfilePage() {
 
   const { control, handleSubmit, reset, setValue, watch, getValues, formState: { errors } } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
+    defaultValues: {
+      nome: "",
+      cnpj: "",
+      email: user?.email || "",
+      telefone: "",
+      endereco: "",
+      site: "",
+      instagram: "",
+      facebook: "",
+      whatsapp: "",
+      logotipoFile: undefined,
+    }
   });
 
   const logotipoFile = watch("logotipoFile");
@@ -75,17 +87,40 @@ export default function CompanyProfilePage() {
       if (docSnap.exists()) {
         const data = docSnap.data() as Empresa;
         setCompanyData(data);
-        reset(data);
+        // Ensure all optional fields default to "" if null or undefined
+        reset({
+          nome: data.nome || "",
+          cnpj: data.cnpj || "",
+          email: data.email || user.email || "",
+          telefone: data.telefone || "",
+          endereco: data.endereco || "",
+          site: data.site || "",
+          instagram: data.instagram || "",
+          facebook: data.facebook || "",
+          whatsapp: data.whatsapp || "",
+          logotipoFile: undefined, // Reset file input
+        });
         if (data.logotipo) setLogoPreview(data.logotipo);
       } else {
-        setValue("email", user.email || "");
+         reset({ // Ensure defaults are set even if no company data exists
+          nome: "",
+          cnpj: "",
+          email: user.email || "",
+          telefone: "",
+          endereco: "",
+          site: "",
+          instagram: "",
+          facebook: "",
+          whatsapp: "",
+          logotipoFile: undefined,
+        });
       }
     } catch (error) {
       toast({ title: "Erro ao buscar dados da empresa", variant: "destructive" });
     } finally {
       setLoadingData(false);
     }
-  }, [user, reset, toast, setValue]);
+  }, [user, reset, toast, setValue]); // Removed setValue from here as reset handles it
 
   useEffect(() => {
     fetchCompanyData();
@@ -113,9 +148,9 @@ export default function CompanyProfilePage() {
       }
       const data = await response.json();
 
-      setValue("nome", data.nome_fantasia || data.razao_social || getValues("nome"));
-      setValue("email", data.email || getValues("email"));
-      setValue("telefone", data.ddd_telefone_1 || getValues("telefone"));
+      setValue("nome", data.nome_fantasia || data.razao_social || getValues("nome") || "");
+      setValue("email", data.email || getValues("email") || "");
+      setValue("telefone", data.ddd_telefone_1 || getValues("telefone") || "");
       
       let address = "";
       if (data.logradouro) address += `${data.descricao_tipo_de_logradouro || ''} ${data.logradouro}`;
@@ -125,7 +160,7 @@ export default function CompanyProfilePage() {
       if (data.municipio) address += `, ${data.municipio}`;
       if (data.uf) address += ` - ${data.uf}`;
       if (data.cep) address += `. CEP: ${data.cep}`;
-      if (address.trim()) setValue("endereco", address.trim());
+      setValue("endereco", address.trim() || "");
       
       toast({ title: "Dados do CNPJ carregados!", description: "Verifique e complete as informações." });
     } catch (error: any) {
@@ -153,7 +188,8 @@ export default function CompanyProfilePage() {
         const snapshot = await uploadBytes(storageRef, file);
         logoUrl = await getDownloadURL(snapshot.ref);
       } catch (error) {
-        toast({ title: "Erro no upload do logotipo", description: "Não foi possível salvar o logotipo.", variant: "destructive" });
+        console.error("Firebase Storage Error:", error); // Log the actual error
+        toast({ title: "Erro no upload do logotipo", description: "Não foi possível salvar o logotipo. Verifique o console para detalhes.", variant: "destructive" });
         setLoading(false);
         return;
       }
@@ -162,9 +198,17 @@ export default function CompanyProfilePage() {
     const { logotipoFile, ...companyDetails } = data; 
 
     const finalData: Partial<Empresa> = {
-      ...companyDetails,
-      logotipo: logoUrl,
       owner: user.uid,
+      nome: companyDetails.nome || "",
+      cnpj: companyDetails.cnpj || "",
+      email: companyDetails.email || "",
+      telefone: companyDetails.telefone || "",
+      endereco: companyDetails.endereco || "",
+      site: companyDetails.site || "",
+      instagram: companyDetails.instagram || "",
+      facebook: companyDetails.facebook || "",
+      whatsapp: companyDetails.whatsapp || "",
+      logotipo: logoUrl,
     };
     
     try {
@@ -174,7 +218,7 @@ export default function CompanyProfilePage() {
       } else {
         await setDoc(companyRef, finalData);
       }
-      setCompanyData(prev => ({...prev, ...finalData} as Empresa));
+      setCompanyData(prev => ({...(prev || {}), ...finalData} as Empresa));
       toast({ title: "Perfil da empresa salvo!", description: "Suas informações foram atualizadas." });
     } catch (error) {
       toast({ title: "Erro ao salvar perfil", description: "Não foi possível salvar os dados.", variant: "destructive" });
@@ -288,6 +332,4 @@ export default function CompanyProfilePage() {
     </div>
   );
 }
-
-
     
