@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 const projectSchema = z.object({
   nome: z.string().min(3, "Nome do projeto deve ter no mínimo 3 caracteres."),
@@ -62,6 +63,10 @@ type ProjectFormData = z.infer<typeof projectSchema>;
 export default function ProjectsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [projects, setProjects] = useState<Projeto[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +106,12 @@ export default function ProjectsPage() {
     fetchClientsAndProjects();
   }, [fetchClientsAndProjects]);
 
+  const openNewForm = useCallback(() => {
+    setEditingProject(null);
+    // Form reset is handled by the useEffect below based on editingProject and isFormOpen
+    setIsFormOpen(true);
+  }, [setIsFormOpen, setEditingProject]);
+
   useEffect(() => {
     if (editingProject) {
       reset(editingProject);
@@ -109,10 +120,19 @@ export default function ProjectsPage() {
     }
   }, [editingProject, reset, isFormOpen]);
 
+  useEffect(() => {
+    const shouldOpenModal = searchParams.get('openNewProject') === 'true';
+    if (shouldOpenModal) {
+      openNewForm();
+      // Remove the query parameter to prevent re-opening on refresh or back navigation
+      router.replace(pathname, { scroll: false });
+    }
+  }, [searchParams, openNewForm, router, pathname]);
+
 
   const onSubmit = async (data: ProjectFormData) => {
     if (!user) return;
-    setLoading(true);
+    setLoading(true); // Set loading for form submission
     try {
       const projectData = {
         ...data,
@@ -135,12 +155,12 @@ export default function ProjectsPage() {
       console.error(error);
       toast({ title: "Erro ao salvar projeto", description: "Não foi possível salvar os dados.", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setLoading(false); // Clear loading for form submission
     }
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    setLoading(true);
+    setLoading(true); // Set loading for delete operation
     try {
       await deleteDoc(doc(db, "projetos", projectId));
       toast({ title: "Projeto excluído", description: "O projeto foi removido com sucesso." });
@@ -148,7 +168,7 @@ export default function ProjectsPage() {
     } catch (error) {
       toast({ title: "Erro ao excluir", description: "Não foi possível remover o projeto.", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setLoading(false); // Clear loading for delete operation
     }
   };
 
@@ -156,11 +176,6 @@ export default function ProjectsPage() {
     setEditingProject(project);
     setIsFormOpen(true);
   };
-
-  const openNewForm = () => {
-    setEditingProject(null);
-    setIsFormOpen(true);
-  }
 
   const filteredProjects = projects.filter(project =>
     project.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -215,6 +230,7 @@ export default function ProjectsPage() {
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
+                      {clients.length === 0 && <p className="p-2 text-sm text-muted-foreground">Nenhum cliente cadastrado.</p>}
                       {clients.map(client => (
                         <SelectItem key={client.id} value={client.id!}>{client.nome}</SelectItem>
                       ))}
@@ -278,7 +294,7 @@ export default function ProjectsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading && projects.length === 0 ? (
+          {loading && projects.length === 0 && clients.length === 0 ? ( // Check if initial data load is happening
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
                <p className="ml-2">Carregando projetos...</p>
@@ -315,10 +331,10 @@ export default function ProjectsPage() {
                       <TableCell>{getClientName(project.clienteId)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 text-xs rounded-full font-medium
-                          ${project.status === 'Concluído' ? 'bg-green-100 text-green-700' :
-                            project.status === 'Em Andamento' ? 'bg-blue-100 text-blue-700' :
-                            project.status === 'Planejamento' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'}`}>
+                          ${project.status === 'Concluído' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' :
+                            project.status === 'Em Andamento' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' :
+                            project.status === 'Planejamento' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                            'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'}`}>
                           {project.status}
                         </span>
                       </TableCell>
@@ -360,4 +376,3 @@ export default function ProjectsPage() {
     </div>
   );
 }
-
