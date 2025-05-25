@@ -1,45 +1,38 @@
 
 "use client";
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuSkeleton,
-} from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const AnodeLogoSkeleton = () => (
-  <Skeleton className="h-8 w-8 rounded-md bg-primary/10" />
-);
 
 export function AppSidebarSkeleton() {
   return (
-    <Sidebar collapsible="icon" side="left" variant="sidebar" className="pointer-events-none bg-sidebar text-sidebar-foreground">
-      <SidebarHeader className="p-4 flex items-center gap-2">
-        <AnodeLogoSkeleton />
-        <Skeleton className="h-6 w-24 bg-primary/10" /> {/* Placeholder for "ANODE Lite" title */}
-      </SidebarHeader>
-      
-      <SidebarContent className="flex-grow p-2">
-        <SidebarMenu>
-          {[...Array(6)].map((_, index) => (
-            <SidebarMenuSkeleton key={index} showIcon={true} />
-          ))}
-        </SidebarMenu>
-      </SidebarContent>
+    <div className="hidden md:flex flex-col h-screen w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border p-4 space-y-4">
+      {/* Header Skeleton */}
+      <div className="flex items-center gap-3 mb-4">
+        <Skeleton className="h-10 w-10 rounded-md bg-sidebar-accent/30" />
+        <Skeleton className="h-6 w-32 bg-sidebar-accent/30" />
+      </div>
 
-      <SidebarFooter className="p-2 mt-auto">
-        <SidebarMenu>
-          <SidebarMenuSkeleton showIcon={true} /> {/* Logout skeleton */}
-        </SidebarMenu>
-        <div className="mt-4 p-2 text-xs text-center text-sidebar-foreground/70 opacity-50">
-          <Skeleton className="h-4 w-32 mx-auto mb-1 bg-primary/10" />
-          <Skeleton className="h-4 w-20 mx-auto bg-primary/10" />
+      {/* Menu Items Skeleton */}
+      <div className="flex-grow space-y-3">
+        {[...Array(6)].map((_, index) => (
+          <div key={index} className="flex items-center gap-3">
+            <Skeleton className="h-8 w-8 rounded bg-sidebar-accent/30" />
+            <Skeleton className="h-5 w-full bg-sidebar-accent/30" />
+          </div>
+        ))}
+      </div>
+
+      {/* Footer Skeleton */}
+      <div className="mt-auto space-y-3">
+        <div className="flex items-center gap-3">
+            <Skeleton className="h-8 w-8 rounded bg-sidebar-accent/30" />
+            <Skeleton className="h-5 w-full bg-sidebar-accent/30" />
         </div>
-      </SidebarFooter>
-    </Sidebar>
+        <div className="pt-4 text-center space-y-1">
+            <Skeleton className="h-3 w-3/4 mx-auto bg-sidebar-accent/30" />
+            <Skeleton className="h-3 w-1/2 mx-auto bg-sidebar-accent/30" />
+        </div>
+      </div>
+    </div>
   );
 }
