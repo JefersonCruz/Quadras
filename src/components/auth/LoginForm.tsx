@@ -66,8 +66,8 @@ export default function LoginForm() {
     } catch (error: any) {
       console.error("Erro no login:", error);
       const errorMessage = error.code === 'auth/invalid-credential' 
-        ? "Email ou senha inválidos."
-        : "Ocorreu um erro ao fazer login. Tente novamente.";
+        ? "Email ou senha inválidos. Verifique seus dados e tente novamente."
+        : "Ocorreu um erro ao fazer login. Tente novamente mais tarde.";
       toast({ title: "Erro no Login", description: errorMessage, variant: "destructive" });
     } finally {
       setLoading(false);
