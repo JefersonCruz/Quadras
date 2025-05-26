@@ -18,27 +18,24 @@ const AnodeLogoFull = () => (
 
 
 export default function HomePage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useAuth(); // loading here is from AuthContext
   const router = useRouter();
 
   useEffect(() => {
+    // Only redirect if AuthContext is done loading and a user is present
     if (!loading && user) {
       router.replace("/dashboard");
     }
   }, [user, loading, router]);
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg text-foreground">Carregando ANODE Lite...</p>
-      </div>
-    );
+  // If AuthContext is still loading, HomePage isn't even rendered by AuthProvider.
+  // So, if HomePage is rendered, AuthContext.loading is false.
+  // This check prevents rendering homepage content if user is present (before redirect effect runs)
+  if (user) {
+    return null;
   }
 
-  // If user is logged in, this component will redirect, so this content is for unauthenticated users.
-  if (user) return null; // Avoid rendering homepage content if user is present (before redirect effect runs)
-
+  // If AuthContext.loading is false AND user is null, this part should render.
   const features = [
     {
       icon: <FileText className="h-10 w-10 text-primary mb-4" />,
@@ -104,7 +101,7 @@ export default function HomePage() {
             </div>
             <div className="mt-16">
               <Image
-                src="https://placehold.co/1200x600.png"
+                src="https://placehold.co/1000x500.png"
                 alt="Plataforma ANODE Lite em uso"
                 width={1000}
                 height={500}
@@ -175,3 +172,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    
