@@ -13,6 +13,7 @@ export interface Empresa {
   facebook?: string;
   whatsapp?: string;
   logotipo?: string; // URL
+  bannerUrl?: string; // URL for banner image
   owner: string; // UID
 }
 
@@ -26,55 +27,55 @@ export interface Cliente {
 }
 
 export interface CircuitoFicha {
-  nome: string; 
-  disjuntor: string; 
-  caboMM: string; 
-  observacoes?: string; 
+  nome: string;
+  disjuntor: string;
+  caboMM: string;
+  observacoes?: string;
 }
 
 export interface FichaTecnica {
   id?: string;
-  owner: string; 
+  owner: string;
   clienteId: string;
   projetoId: string;
 
   logotipoEmpresaUrl?: string;
-  nomeEmpresa?: string; 
-  tituloFicha: string; 
-  identificacaoLocal: string; 
+  nomeEmpresa?: string;
+  tituloFicha: string;
+  identificacaoLocal: string;
   dataInstalacao: Timestamp;
-  responsavelTecnico: string; 
-  versaoFicha: string; 
+  responsavelTecnico: string;
+  versaoFicha: string;
 
   circuitos: CircuitoFicha[];
 
-  observacaoNBR?: string; 
+  observacaoNBR?: string;
   observacaoDR?: boolean;
   descricaoDROpcional?: string;
 
-  qrCodeUrl?: string; 
-  textoAcessoOnline?: string; 
-  linkFichaPublica?: string; 
+  qrCodeUrl?: string;
+  textoAcessoOnline?: string;
+  linkFichaPublica?: string;
 
-  nomeEletricista: string; 
-  assinaturaEletricistaUrl?: string; 
-  contatoEletricista: string; 
+  nomeEletricista: string;
+  assinaturaEletricistaUrl?: string;
+  contatoEletricista: string;
   ramalPortaria?: string;
 
-  dataCriacao: Timestamp; 
-  pdfUrl?: string; 
+  dataCriacao: Timestamp;
+  pdfUrl?: string;
 }
 
 
 export interface Etiqueta {
   id?: string;
-  createdBy: string; 
+  createdBy: string;
   clienteId: string;
   projetoId: string;
-  tipo: string; 
-  qrCode?: string; 
-  circuito: string; 
-  posicao: string; 
+  tipo: string;
+  qrCode?: string;
+  circuito: string;
+  posicao: string;
 }
 
 export interface Projeto {
@@ -82,13 +83,13 @@ export interface Projeto {
   nome: string;
   descricao?: string;
   clienteId: string;
-  owner: string; 
+  owner: string;
   status: 'Planejamento' | 'Em Andamento' | 'Concluído' | 'Cancelado';
   dataCriacao: Timestamp;
 }
 
 export interface Usuario {
-  id?: string; 
+  id?: string;
   email: string;
   nome?: string;
   role?: 'user' | 'admin';
@@ -118,12 +119,12 @@ export interface BlocosEditaveisContrato {
 }
 
 export interface AssinaturaDetalhes {
-  assinanteUid?: string; 
-  nome?: string; 
-  email?: string; 
+  assinanteUid?: string;
+  nome?: string;
+  email?: string;
   ip?: string;
   dataHora?: Timestamp;
-  canalAcesso?: 'email' | 'whatsapp' | 'plataforma'; 
+  canalAcesso?: 'email' | 'whatsapp' | 'plataforma';
   userAgent?: string;
 }
 
@@ -143,21 +144,21 @@ export interface EmpresaPrestadorContrato {
 
 export interface Contrato {
   id?: string;
-  createdBy: string; 
+  createdBy: string;
   tipo: 'padrão' | 'emergencial';
   cliente: ClienteContrato;
-  testemunhas?: TestemunhaContrato[]; 
+  testemunhas?: TestemunhaContrato[];
   blocosEditaveis: BlocosEditaveisContrato;
   status: 'rascunho' | 'pendente_assinaturas' | 'parcialmente_assinado' | 'assinado' | 'cancelado';
   assinaturas: AssinaturasContrato;
-  pdfUrl?: string; 
+  pdfUrl?: string;
   dataCriacao: Timestamp;
   dataUltimaModificacao?: Timestamp;
   dataEnvioAssinaturas?: Timestamp;
   dataFinalizacaoAssinaturas?: Timestamp;
   empresaPrestador?: EmpresaPrestadorContrato;
   taxaDeslocamento?: number;
-  termosEmergencial?: string; 
+  termosEmergencial?: string;
 }
 
 
@@ -169,11 +170,11 @@ export interface FichaPublica extends FichaTecnica {
 
 export interface Relatorio {
   id?: string;
-  owner: string; 
+  owner: string;
   projetoId?: string;
   clienteId?: string;
-  tipo: string; 
+  tipo: string;
   dataGeracao: Timestamp;
-  conteudo: any; 
+  conteudo: any;
   pdfUrl?: string;
 }

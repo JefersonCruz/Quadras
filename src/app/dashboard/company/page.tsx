@@ -5,7 +5,7 @@ import type { Empresa } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, Save, Building, Search, Image as ImageIcon } from "lucide-react";
+import { Loader2, Save, Building, Search, Image as ImageIcon, UploadCloud } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useForm, Controller } from "react-hook-form";
@@ -14,22 +14,23 @@ import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { db, storage } from "@/lib/firebase/config";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import NextImage from "next/image"; // Renamed to avoid conflict
+import NextImage from "next/image";
 
 const companySchema = z.object({
-  nome: z.string().min(3, "Nome da empresa é obrigatório."),
-  cnpj: z.string().min(14, "CNPJ deve ter 14 dígitos.").max(18, "CNPJ inválido.").optional().or(z.literal('')),
-  email: z.string().email("Email inválido.").optional().or(z.literal('')),
-  telefone: z.string().min(10, "Telefone inválido.").optional().or(z.literal('')),
-  endereco: z.string().optional().or(z.literal('')),
-  site: z.string().url("URL do site inválida.").optional().or(z.literal('')),
-  instagram: z.string().optional().or(z.literal('')),
-  facebook: z.string().optional().or(z.literal('')),
-  whatsapp: z.string().optional().or(z.literal('')),
+  nome: z.string().min(3, "Nome da empresa é obrigatório.").default(""),
+  cnpj: z.string().min(14, "CNPJ deve ter 14 dígitos.").max(18, "CNPJ inválido.").optional().or(z.literal('')).default(""),
+  email: z.string().email("Email inválido.").optional().or(z.literal('')).default(""),
+  telefone: z.string().min(10, "Telefone inválido.").optional().or(z.literal('')).default(""),
+  endereco: z.string().optional().or(z.literal('')).default(""),
+  site: z.string().url("URL do site inválida.").optional().or(z.literal('')).default(""),
+  instagram: z.string().optional().or(z.literal('')).default(""),
+  facebook: z.string().optional().or(z.literal('')).default(""),
+  whatsapp: z.string().optional().or(z.literal('')).default(""),
   logotipoFile: z.custom<FileList>().optional(),
+  bannerFile: z.custom<FileList>().optional(),
 });
 
 type CompanyFormData = z.infer<typeof companySchema>;
@@ -38,10 +39,12 @@ export default function CompanyProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [companyData, setCompanyData] = useState<Empresa | null>(null);
-  const [loading, setLoading] = useState(false); // For form submission
-  const [loadingData, setLoadingData] = useState(true); // For initial data fetch
-  const [cnpjLoading, setCnpjLoading] = useState(false); // For CNPJ lookup
-  const [newLogoPreview, setNewLogoPreview] = useState<string | null>(null); // For previewing newly selected logo
+  const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [newLogoPreview, setNewLogoPreview] = useState<string | null>(null);
+  const [newBannerPreview, setNewBannerPreview] = useState<string | null>(null);
+
 
   const { control, handleSubmit, reset, setValue, watch, getValues, formState: { errors } } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
@@ -56,29 +59,46 @@ export default function CompanyProfilePage() {
       facebook: "",
       whatsapp: "",
       logotipoFile: undefined,
+      bannerFile: undefined,
     }
   });
 
   const logotipoFileWatcher = watch("logotipoFile");
+  const bannerFileWatcher = watch("bannerFile");
 
   useEffect(() => {
     if (logotipoFileWatcher && logotipoFileWatcher.length > 0) {
       const file = logotipoFileWatcher[0];
-      if (file.size > 2 * 1024 * 1024) { // 2MB size limit
-        toast({ title: "Arquivo muito grande", description: "O logotipo deve ter no máximo 2MB.", variant: "destructive"});
-        setValue("logotipoFile", undefined); 
-        setNewLogoPreview(null); 
+      if (file.size > 2 * 1024 * 1024) {
+        toast({ title: "Logotipo muito grande", description: "O arquivo do logotipo deve ter no máximo 2MB.", variant: "destructive"});
+        setValue("logotipoFile", undefined);
+        setNewLogoPreview(null);
         return;
       }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewLogoPreview(reader.result as string);
-      };
+      reader.onloadend = () => setNewLogoPreview(reader.result as string);
       reader.readAsDataURL(file);
     } else {
-      setNewLogoPreview(null); // Clear preview if file is removed
+      setNewLogoPreview(null);
     }
   }, [logotipoFileWatcher, setValue, toast]);
+
+  useEffect(() => {
+    if (bannerFileWatcher && bannerFileWatcher.length > 0) {
+      const file = bannerFileWatcher[0];
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit for banner
+        toast({ title: "Banner muito grande", description: "O arquivo do banner deve ter no máximo 5MB.", variant: "destructive"});
+        setValue("bannerFile", undefined);
+        setNewBannerPreview(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => setNewBannerPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setNewBannerPreview(null);
+    }
+  }, [bannerFileWatcher, setValue, toast]);
 
   const fetchCompanyData = useCallback(async () => {
     if (!user) return;
@@ -99,22 +119,14 @@ export default function CompanyProfilePage() {
           instagram: data.instagram || "",
           facebook: data.facebook || "",
           whatsapp: data.whatsapp || "",
-          logotipoFile: undefined, 
-        });
-        // No need to set newLogoPreview here, it's for new uploads
-      } else {
-         setCompanyData(null); // Ensure companyData is null if not found
-         reset({ 
-          nome: "",
-          cnpj: "",
-          email: user.email || "",
-          telefone: "",
-          endereco: "",
-          site: "",
-          instagram: "",
-          facebook: "",
-          whatsapp: "",
           logotipoFile: undefined,
+          bannerFile: undefined,
+        });
+      } else {
+         setCompanyData(null);
+         reset({
+          nome: "", cnpj: "", email: user.email || "", telefone: "", endereco: "", site: "", instagram: "", facebook: "", whatsapp: "",
+          logotipoFile: undefined, bannerFile: undefined,
         });
       }
     } catch (error) {
@@ -135,13 +147,11 @@ export default function CompanyProfilePage() {
       toast({ title: "CNPJ não informado", description: "Por favor, insira um CNPJ para buscar.", variant: "destructive" });
       return;
     }
-
     const cleanedCnpj = cnpjValue.replace(/\D/g, '');
     if (cleanedCnpj.length !== 14) {
         toast({ title: "CNPJ inválido", description: "O CNPJ deve conter 14 números.", variant: "destructive" });
         return;
     }
-
     setCnpjLoading(true);
     try {
       const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanedCnpj}`);
@@ -150,11 +160,9 @@ export default function CompanyProfilePage() {
         throw new Error(errorData.message || "CNPJ não encontrado ou erro na API.");
       }
       const data = await response.json();
-
       setValue("nome", data.nome_fantasia || data.razao_social || getValues("nome") || "");
       setValue("email", data.email || getValues("email") || "");
       setValue("telefone", data.ddd_telefone_1 || getValues("telefone") || "");
-      
       let address = "";
       if (data.logradouro) address += `${data.descricao_tipo_de_logradouro || ''} ${data.logradouro}`;
       if (data.numero) address += `, ${data.numero}`;
@@ -164,7 +172,6 @@ export default function CompanyProfilePage() {
       if (data.uf) address += ` - ${data.uf}`;
       if (data.cep) address += `. CEP: ${data.cep}`;
       setValue("endereco", address.trim() || "");
-      
       toast({ title: "Dados do CNPJ carregados!", description: "Verifique e complete as informações." });
     } catch (error: any) {
       toast({ title: "Erro ao buscar CNPJ", description: error.message, variant: "destructive" });
@@ -176,57 +183,68 @@ export default function CompanyProfilePage() {
   const onSubmit = async (data: CompanyFormData) => {
     if (!user) return;
     setLoading(true);
-    
-    let logoUrlToSave = companyData?.logotipo || "";
 
-    if (data.logotipoFile && data.logotipoFile.length > 0) {
-      const file = data.logotipoFile[0];
-       if (file.size > 2 * 1024 * 1024) { 
-        toast({ title: "Logotipo muito grande", description: "O arquivo do logotipo excede 2MB.", variant: "destructive"});
-        setLoading(false);
-        return;
-      }
-      const storageRef = ref(storage, `empresas/${user.uid}/logotipo/${file.name}`);
-      try {
+    let logoUrlToSave = companyData?.logotipo || "";
+    let bannerUrlToSave = companyData?.bannerUrl || "";
+
+    try {
+      // Handle logo upload
+      if (data.logotipoFile && data.logotipoFile.length > 0) {
+        const file = data.logotipoFile[0];
+        if (file.size > 2 * 1024 * 1024) {
+          toast({ title: "Logotipo muito grande", description: "O arquivo do logotipo excede 2MB.", variant: "destructive"});
+          setLoading(false); return;
+        }
+        const storageRef = ref(storage, `empresas/${user.uid}/logotipo/${Date.now()}_${file.name}`);
         const snapshot = await uploadBytes(storageRef, file);
         logoUrlToSave = await getDownloadURL(snapshot.ref);
-      } catch (error) {
-        console.error("Firebase Storage Error:", error); 
-        toast({ title: "Erro no upload do logotipo", description: "Não foi possível salvar o logotipo. Verifique o console para detalhes.", variant: "destructive" });
-        setLoading(false);
-        return;
+        if (companyData?.logotipo && companyData.logotipo !== logoUrlToSave) { // Delete old logo if new one is uploaded
+            try { await deleteObject(ref(storage, companyData.logotipo)); } catch (e) { console.warn("Could not delete old logo", e); }
+        }
       }
-    }
-    
-    const { logotipoFile, ...companyDetails } = data; 
 
-    const finalData: Partial<Empresa> = {
-      owner: user.uid,
-      nome: companyDetails.nome || "",
-      cnpj: companyDetails.cnpj || "",
-      email: companyDetails.email || "",
-      telefone: companyDetails.telefone || "",
-      endereco: companyDetails.endereco || "",
-      site: companyDetails.site || "",
-      instagram: companyDetails.instagram || "",
-      facebook: companyDetails.facebook || "",
-      whatsapp: companyDetails.whatsapp || "",
-      logotipo: logoUrlToSave,
-    };
-    
-    try {
+      // Handle banner upload
+      if (data.bannerFile && data.bannerFile.length > 0) {
+        const file = data.bannerFile[0];
+        if (file.size > 5 * 1024 * 1024) {
+          toast({ title: "Banner muito grande", description: "O arquivo do banner excede 5MB.", variant: "destructive"});
+          setLoading(false); return;
+        }
+        const storageRef = ref(storage, `empresas/${user.uid}/banner/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        bannerUrlToSave = await getDownloadURL(snapshot.ref);
+         if (companyData?.bannerUrl && companyData.bannerUrl !== bannerUrlToSave) { // Delete old banner if new one is uploaded
+            try { await deleteObject(ref(storage, companyData.bannerUrl)); } catch (e) { console.warn("Could not delete old banner", e); }
+        }
+      }
+
+      const { logotipoFile, bannerFile, ...companyDetails } = data;
+      const finalData: Partial<Empresa> = {
+        owner: user.uid,
+        nome: companyDetails.nome || "",
+        cnpj: companyDetails.cnpj || "",
+        email: companyDetails.email || "",
+        telefone: companyDetails.telefone || "",
+        endereco: companyDetails.endereco || "",
+        site: companyDetails.site || "",
+        instagram: companyDetails.instagram || "",
+        facebook: companyDetails.facebook || "",
+        whatsapp: companyDetails.whatsapp || "",
+        logotipo: logoUrlToSave,
+        bannerUrl: bannerUrlToSave,
+      };
+
       const companyRef = doc(db, "empresas", user.uid);
-      // Check if document exists to decide between setDoc and updateDoc
       const docSnap = await getDoc(companyRef);
       if (docSnap.exists()) {
         await updateDoc(companyRef, finalData);
       } else {
-        await setDoc(companyRef, finalData); // Use setDoc for new documents
+        await setDoc(companyRef, finalData);
       }
 
-      setCompanyData(prev => ({...(prev || {}), ...finalData, id: user.uid } as Empresa)); // Update local state
-      setNewLogoPreview(null); // Clear new logo preview after successful save
-      setValue("logotipoFile", undefined); // Clear the file input in the form
+      setCompanyData(prev => ({...(prev || {}), ...finalData, id: user.uid } as Empresa));
+      setNewLogoPreview(null); setValue("logotipoFile", undefined);
+      setNewBannerPreview(null); setValue("bannerFile", undefined);
       toast({ title: "Perfil da empresa salvo!", description: "Suas informações foram atualizadas." });
     } catch (error) {
       console.error("Error saving company profile:", error);
@@ -241,11 +259,11 @@ export default function CompanyProfilePage() {
       <div className="space-y-6">
         <PageHeader
           title="Perfil da Empresa"
-          description="Gerencie as informações da sua empresa que aparecerão em documentos e relatórios."
+          description="Gerencie as informações da sua empresa."
         />
         <Card>
           <CardContent className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" /> 
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="ml-2">Carregando perfil...</p>
           </CardContent>
         </Card>
@@ -257,28 +275,49 @@ export default function CompanyProfilePage() {
     <div className="space-y-6">
       <PageHeader
         title="Perfil da Empresa"
-        description="Gerencie as informações da sua empresa que aparecerão em documentos e relatórios."
+        description="Gerencie as informações e a identidade visual da sua empresa."
       />
       <Card>
-        <div className="p-6 border-b flex flex-col items-center gap-4">
-          {companyData?.logotipo ? (
-            <NextImage 
-              src={companyData.logotipo} 
-              alt="Logotipo da Empresa" 
-              width={128} 
-              height={128} 
-              className="rounded-full object-contain border-2 border-primary p-1"
-              data-ai-hint="logo company"
+        <div className="relative h-48 md:h-64 bg-muted/50 w-full group">
+          {companyData?.bannerUrl ? (
+            <NextImage
+              src={companyData.bannerUrl}
+              alt="Banner da Empresa"
+              layout="fill"
+              objectFit="cover"
+              className="rounded-t-lg"
+              data-ai-hint="company banner"
             />
           ) : (
-            <div className="w-32 h-32 rounded-full bg-muted flex items-center justify-center border-2 border-dashed border-primary">
-              <ImageIcon className="h-16 w-16 text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <UploadCloud className="h-12 w-12 mb-2" />
+              <p>Adicione um banner para sua empresa</p>
+              <p className="text-xs">(Recomendado: 1200x300px ou similar)</p>
             </div>
           )}
-          <h2 className="text-2xl font-semibold text-foreground">{companyData?.nome || "Nome da Empresa"}</h2>
+           <div className="absolute inset-0 bg-black/30 rounded-t-lg"></div>
         </div>
 
-        <CardHeader>
+        <div className="relative px-6 pb-6 -mt-16 flex flex-col items-center text-center">
+          <div className="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-background bg-muted flex items-center justify-center overflow-hidden shadow-lg mb-2">
+            {companyData?.logotipo ? (
+              <NextImage
+                src={companyData.logotipo}
+                alt="Logotipo da Empresa"
+                width={144}
+                height={144}
+                className="object-contain"
+                data-ai-hint="company logo"
+              />
+            ) : (
+              <ImageIcon className="h-16 w-16 text-muted-foreground" />
+            )}
+          </div>
+          <h2 className="text-2xl font-semibold text-foreground">{companyData?.nome || "Nome da Empresa"}</h2>
+           <p className="text-sm text-muted-foreground">{companyData?.email || user?.email || "email@nao.definido"}</p>
+        </div>
+
+        <CardHeader className="pt-0">
           <CardTitle className="flex items-center"><Building className="mr-2 h-5 w-5 text-primary" /> Detalhes da Empresa</CardTitle>
           <CardDescription>Mantenha seus dados atualizados. Use o CNPJ para preencher automaticamente alguns campos.</CardDescription>
         </CardHeader>
@@ -335,33 +374,64 @@ export default function CompanyProfilePage() {
                 <Controller name="facebook" control={control} render={({ field }) => <Input id="facebook" {...field} placeholder="/suaempresa ou https://facebook.com/..." />} />
               </div>
             </div>
-            
-            <div>
-              <Label htmlFor="logotipoFile">Alterar/Adicionar Logotipo</Label>
-              <Controller 
-                name="logotipoFile" 
-                control={control} 
-                render={({ field: { onChange, value, ...restField } }) => (
-                  <Input 
-                    id="logotipoFile" 
-                    type="file" 
-                    accept="image/png, image/jpeg, image/webp, image/gif" 
-                    onChange={(e) => onChange(e.target.files)} 
-                    {...restField} 
-                    className="mt-1"
-                  />
-                )}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Recomendamos um logotipo quadrado (1:1). Tamanho máximo: 2MB.</p>
-              {newLogoPreview && (
-                <div className="mt-4">
-                  <p className="text-sm font-medium mb-2">Pré-visualização do novo logotipo:</p>
-                  <div className="w-36 h-36 rounded border bg-muted/50 flex items-center justify-center overflow-hidden">
-                    <NextImage src={newLogoPreview} alt="Preview do novo logotipo" width={144} height={144} className="object-contain max-w-full max-h-full" data-ai-hint="logo company" />
-                  </div>
+
+            <Card className="p-4 border-dashed">
+                <CardTitle className="text-lg mb-3">Identidade Visual</CardTitle>
+                <div className="space-y-4">
+                    <div>
+                        <Label htmlFor="logotipoFile">Alterar/Adicionar Logotipo</Label>
+                        <Controller
+                            name="logotipoFile"
+                            control={control}
+                            render={({ field: { onChange, value, ...restField } }) => (
+                            <Input
+                                id="logotipoFile"
+                                type="file"
+                                accept="image/png, image/jpeg, image/webp, image/gif"
+                                onChange={(e) => onChange(e.target.files)}
+                                {...restField}
+                                className="mt-1"
+                            />
+                            )}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Recomendamos um logotipo quadrado (1:1). Máx: 2MB.</p>
+                        {newLogoPreview && (
+                            <div className="mt-4">
+                            <p className="text-sm font-medium mb-2">Pré-visualização do novo logotipo:</p>
+                            <div className="w-24 h-24 rounded border bg-muted/50 flex items-center justify-center overflow-hidden">
+                                <NextImage src={newLogoPreview} alt="Preview do novo logotipo" width={96} height={96} className="object-contain max-w-full max-h-full" data-ai-hint="company logo preview" />
+                            </div>
+                            </div>
+                        )}
+                    </div>
+                     <div>
+                        <Label htmlFor="bannerFile">Alterar/Adicionar Banner</Label>
+                        <Controller
+                            name="bannerFile"
+                            control={control}
+                            render={({ field: { onChange, value, ...restField } }) => (
+                            <Input
+                                id="bannerFile"
+                                type="file"
+                                accept="image/png, image/jpeg, image/webp"
+                                onChange={(e) => onChange(e.target.files)}
+                                {...restField}
+                                className="mt-1"
+                            />
+                            )}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Recomendado: Imagem horizontal (ex: 1200x300px). Máx: 5MB.</p>
+                        {newBannerPreview && (
+                            <div className="mt-4">
+                            <p className="text-sm font-medium mb-2">Pré-visualização do novo banner:</p>
+                            <div className="w-full max-w-md h-24 rounded border bg-muted/50 flex items-center justify-center overflow-hidden">
+                                <NextImage src={newBannerPreview} alt="Preview do novo banner" layout="fill" objectFit="contain" className="max-w-full max-h-full" data-ai-hint="company banner preview" />
+                            </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
-              )}
-            </div>
+            </Card>
 
             <Button type="submit" disabled={loading || cnpjLoading} className="w-full md:w-auto">
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Salvar Alterações
@@ -372,4 +442,3 @@ export default function CompanyProfilePage() {
     </div>
   );
 }
-    
