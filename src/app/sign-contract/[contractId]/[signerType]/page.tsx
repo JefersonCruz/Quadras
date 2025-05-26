@@ -20,7 +20,7 @@ type SignerKeyInFirestore = keyof AssinaturasContrato;
 interface SignerContextDetails {
   keyInFirestore: SignerKeyInFirestore;
   name: string;
-  email?: string; // Email might not always be present or relevant for provider if signing with UID
+  email?: string; 
   roleDescription: string;
 }
 
@@ -56,6 +56,7 @@ export default function SignContractPage() {
     const fetchContract = async () => {
       setLoading(true);
       setError(null);
+      setSignerContext(null); // Reset signer context on new fetch
       try {
         const contractRef = doc(db, "contratos", contractId);
         const docSnap = await getDoc(contractRef);
@@ -72,9 +73,9 @@ export default function SignContractPage() {
           switch (signerTypeParam) {
             case 'client':
               currentSignerKey = 'cliente';
-              name = contractData.cliente.nome;
-              email = contractData.cliente.email;
-              roleDesc = `Cliente (${name})`;
+              name = contractData.cliente?.nome;
+              email = contractData.cliente?.email;
+              roleDesc = name ? `Cliente (${name})` : "Cliente";
               break;
             case 'witness1':
               currentSignerKey = 'testemunha1';
@@ -88,11 +89,11 @@ export default function SignContractPage() {
               email = contractData.testemunhas?.[1]?.email;
               roleDesc = name ? `Testemunha 2 (${name})` : "Testemunha 2";
               break;
-            case 'provider':
+            case 'provider': // Assuming 'provider' refers to the contract creator/service provider
               currentSignerKey = 'prestador';
+              // For provider, name might come from empresaPrestador.responsavelTecnico or directly from user profile
               name = contractData.empresaPrestador?.responsavelTecnico || contractData.empresaPrestador?.nome || "Prestador de Serviço";
-              // Provider email for signature might be from their auth profile, not explicitly in contract
-              // For now, we'll use the name.
+              // Email for provider might be more complex to fetch here, assuming it's linked to createdBy
               roleDesc = `Prestador (${name})`;
               break;
             default:
@@ -103,7 +104,7 @@ export default function SignContractPage() {
 
            if (!name) {
              setError(`Detalhes para ${signerTypeParam} não encontrados ou não aplicáveis neste contrato.`);
-             setLoading(false);
+             // setLoading(false); // Do not set loading false here if error is set, let the main render handle it.
              return;
            }
           setSignerContext({ keyInFirestore: currentSignerKey, name, email, roleDescription: roleDesc });
@@ -125,16 +126,16 @@ export default function SignContractPage() {
     };
 
     fetchContract();
-  }, [contractId, signerTypeParam, toast]);
+  }, [contractId, signerTypeParam]); // Removed toast from dependencies
 
   const isAlreadySigned = () => {
-    if (!contract || !signerContext || !contract.assinaturas) return false;
+    if (!contract || !signerContext || !contract.assinaturas || !signerContext.keyInFirestore) return false;
     return !!contract.assinaturas[signerContext.keyInFirestore]?.dataHora;
   };
 
   const handleSignContract = async () => {
-    if (!contract || !contract.id || !signerContext) {
-        toast({ title: "Erro", description: "Dados do contrato ou assinante ausentes.", variant: "destructive"});
+    if (!contract || !contract.id || !signerContext || !signerContext.keyInFirestore) {
+        toast({ title: "Erro", description: "Dados do contrato ou informações do assinante ausentes.", variant: "destructive"});
         return;
     }
     if (isAlreadySigned()) {
@@ -142,10 +143,9 @@ export default function SignContractPage() {
         return;
     }
     if (contract.status === 'assinado' || contract.status === 'cancelado') {
-      toast({ title: "Contrato Finalizado", description: `Este contrato já está ${contract.status}.`, variant: "default"});
+      toast({ title: "Contrato Finalizado", description: `Este contrato já está ${contract.status}. Não pode mais ser assinado.`, variant: "default"});
       return;
     }
-
 
     setIsSigning(true);
     try {
@@ -154,61 +154,86 @@ export default function SignContractPage() {
         const signatureData: AssinaturaDetalhes = {
             nome: signerContext.name,
             dataHora: Timestamp.now(),
-            // email: signerContext.email, // Optional, could be derived if user is logged in
-            // ip: "captured_ip_address", // Requires server-side logic or more complex client-side
-            // userAgent: navigator.userAgent, // Can be captured client-side
         };
-        if (signerContext.email) { // Add email if available from context
+        if (signerContext.email) { 
             signatureData.email = signerContext.email;
         }
+        // Placeholder for IP and UserAgent - these would ideally be captured server-side or via a trusted client mechanism
+        // signatureData.ip = "CAPTURED_IP_ADDRESS"; 
+        // signatureData.userAgent = navigator.userAgent;
 
 
-        const updatePayload: any = {
-          dataUltimaModificacao: Timestamp.now(),
+        // Create the specific path for the update
+        const signaturePath = `assinaturas.${signerContext.keyInFirestore}`;
+        
+        const updatedSignatures = {
+          ...(contract.assinaturas || {}), // Start with existing signatures
+          [signerContext.keyInFirestore]: signatureData,
         };
-        updatePayload[`assinaturas.${signerContext.keyInFirestore}`] = signatureData;
 
         // Determine new status
-        const currentSignatures = { ...contract.assinaturas, [signerContext.keyInFirestore]: signatureData };
-        
-        let allRequiredSigned = true;
-        if (!currentSignatures.cliente?.dataHora) allRequiredSigned = false;
-        if (!currentSignatures.prestador?.dataHora) allRequiredSigned = false; // Assuming provider also signs
+        let newStatus: Contrato['status'] = 'parcialmente_assinado';
+        let allSigned = true;
+
+        // Check client
+        if (!updatedSignatures.cliente?.dataHora) allSigned = false;
+        // Check provider (prestador) - assuming provider also signs
+        if (!updatedSignatures.prestador?.dataHora) allSigned = false;
         
         // Check witnesses only if they exist on the contract
         if (contract.testemunhas && contract.testemunhas.length > 0) {
-            if (!currentSignatures.testemunha1?.dataHora) allRequiredSigned = false;
-        }
-        if (contract.testemunhas && contract.testemunhas.length > 1) {
-            if (!currentSignatures.testemunha2?.dataHora) allRequiredSigned = false;
-        }
-
-
-        if (allRequiredSigned) {
-            updatePayload.status = 'assinado';
-            updatePayload.dataFinalizacaoAssinaturas = Timestamp.now();
+            if (!updatedSignatures.testemunha1?.dataHora) allSigned = false;
+            if (contract.testemunhas.length > 1 && !updatedSignatures.testemunha2?.dataHora) allSigned = false;
         } else {
-            updatePayload.status = 'parcialmente_assinado';
+          // If no witnesses are defined on the contract, they are not required for it to be 'assinado'
+        }
+        
+        // A contract is fully signed if client and provider have signed, AND
+        // all defined witnesses (if any) have signed.
+        let requiredSignersCount = 2; // client + provider
+        let signedCount = 0;
+        if(updatedSignatures.cliente?.dataHora) signedCount++;
+        if(updatedSignatures.prestador?.dataHora) signedCount++;
+
+        if(contract.testemunhas?.length) {
+            requiredSignersCount += contract.testemunhas.length;
+            if(updatedSignatures.testemunha1?.dataHora) signedCount++;
+            if(contract.testemunhas.length > 1 && updatedSignatures.testemunha2?.dataHora) signedCount++;
+        }
+
+
+        if (signedCount === requiredSignersCount) {
+            newStatus = 'assinado';
+        }
+        
+        const updatePayload: any = {
+          assinaturas: updatedSignatures,
+          status: newStatus,
+          dataUltimaModificacao: Timestamp.now(),
+        };
+
+        if (newStatus === 'assinado') {
+            updatePayload.dataFinalizacaoAssinaturas = Timestamp.now();
         }
         
         await updateDoc(contractRef, updatePayload);
 
+        // Update local contract state to reflect changes immediately
         setContract(prev => prev ? ({
             ...prev,
-            assinaturas: currentSignatures,
-            status: updatePayload.status,
+            assinaturas: updatedSignatures,
+            status: newStatus,
             dataUltimaModificacao: updatePayload.dataUltimaModificacao,
-            dataFinalizacaoAssinaturas: allRequiredSigned ? updatePayload.dataFinalizacaoAssinaturas : prev.dataFinalizacaoAssinaturas,
+            dataFinalizacaoAssinaturas: newStatus === 'assinado' ? updatePayload.dataFinalizacaoAssinaturas : prev.dataFinalizacaoAssinaturas,
         }) : null);
 
         toast({ title: "Contrato Assinado!", description: `Obrigado, ${signerContext.name}. Sua assinatura foi registrada.`});
 
-    } catch (error: any)
-     {
+    } catch (error: any) {
         console.error("Erro ao assinar contrato:", error);
         let description = "Não foi possível registrar sua assinatura.";
         if (error.code === 'permission-denied') {
-            description = "Você não tem permissão para assinar este contrato ou a operação foi bloqueada pelas regras de segurança. Verifique se está logado com o e-mail correto.";
+            description = "Você não tem permissão para assinar este contrato ou a operação foi bloqueada pelas regras de segurança. Verifique se está logado com o e-mail correto ou se o contrato permite sua assinatura.";
         } else if (error.message) {
             description = error.message;
         }
@@ -260,7 +285,7 @@ export default function SignContractPage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-muted-foreground">Não foi possível carregar os detalhes do contrato ou do assinante.</p>
+                    <p className="text-muted-foreground">Não foi possível carregar os detalhes do contrato ou do assinante. Verifique se o link está correto e tente novamente.</p>
                 </CardContent>
                  <CardFooter>
                     <Button asChild className="w-full">
@@ -281,7 +306,7 @@ export default function SignContractPage() {
             Assinatura de Contrato Digital
             </CardTitle>
             <CardDescription>
-            Contrato para: <span className="font-semibold">{contract.cliente.nome}</span>
+            Contrato para: <span className="font-semibold">{contract.cliente?.nome || "Cliente não informado"}</span>
             <br />
             Tipo: <span className="font-semibold">{contract.tipo === 'padrão' ? 'Padrão' : 'Emergencial'}</span>
             {contract.id && <span className="block text-xs text-muted-foreground mt-1">ID: {contract.id}</span>}
@@ -297,7 +322,7 @@ export default function SignContractPage() {
             <div className="p-4 border rounded-md max-h-60 overflow-y-auto">
             <h3 className="font-semibold text-lg mb-2">Objeto do Contrato (Resumo):</h3>
             <p className="text-sm whitespace-pre-wrap">
-                {contract.blocosEditaveis.objetoDoContrato}
+                {contract.blocosEditaveis?.objetoDoContrato || "Objeto do contrato não especificado."}
             </p>
             {contract.tipo === 'emergencial' && contract.termosEmergencial && (
                 <div className="mt-3 pt-3 border-t">
@@ -333,16 +358,17 @@ export default function SignContractPage() {
             >
                 {isSigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Assinar Contrato Digitalmente"}
             </Button>
-            {contract.status === 'assinado' && <p className="text-sm text-green-600 font-medium">Este contrato já foi totalmente assinado.</p>}
-            {contract.status === 'cancelado' && <p className="text-sm text-red-600 font-medium">Este contrato foi cancelado.</p>}
+            {contract.status === 'assinado' && <p className="text-sm text-green-600 font-medium mt-2">Este contrato já foi totalmente assinado.</p>}
+            {contract.status === 'cancelado' && <p className="text-sm text-red-600 font-medium mt-2">Este contrato foi cancelado e não pode mais ser assinado.</p>}
             </div>
             )}
         </CardContent>
         <CardFooter className="flex-col items-start text-xs text-muted-foreground space-y-1 pt-4">
-            <p>Em caso de dúvidas, entre em contato com {contract.empresaPrestador?.nome || "o prestador de serviço"} através do e-mail {contract.empresaPrestador?.email || (contract.empresaPrestador?.responsavelTecnico ? `com ${contract.empresaPrestador.responsavelTecnico}` : "disponibilizado")}.</p>
+            <p>Em caso de dúvidas, entre em contato com {contract.empresaPrestador?.nome || "o prestador de serviço"} (Email: {contract.empresaPrestador?.email || contract.cliente?.email || "não informado"}).</p>
             <p>Powered by ANODE Lite</p>
         </CardFooter>
         </Card>
     </div>
   );
 }
+
