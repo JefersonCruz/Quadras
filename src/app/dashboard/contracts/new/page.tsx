@@ -42,9 +42,9 @@ const contractSchema = z.object({
   foro: z.string().optional(),
 
   // Campos da empresa (preenchidos automaticamente e um editável)
-  empresaNome: z.string().optional(), // Display only
-  empresaCnpj: z.string().optional(), // Display only
-  empresaEndereco: z.string().optional(), // Display only
+  empresaNomeDisplay: z.string().optional(), // Display only, fetched data
+  empresaCnpjDisplay: z.string().optional(), // Display only, fetched data
+  empresaEnderecoDisplay: z.string().optional(), // Display only, fetched data
   empresaResponsavel: z.string().min(3, "Responsável da empresa é obrigatório.").optional(),
 });
 
@@ -75,9 +75,9 @@ export default function NewContractPage() {
       multasPenalidades: "Em caso de descumprimento de quaisquer cláusulas deste contrato por qualquer das partes, incidirá multa de 10% (dez por cento) sobre o valor total do contrato, sem prejuízo de eventuais perdas e danos.",
       cancelamento: "Qualquer das partes poderá rescindir o presente contrato mediante aviso prévio de 30 (trinta) dias. Em caso de rescisão imotivada pelo CONTRATANTE, este arcará com os custos dos serviços já executados e materiais adquiridos até a data da rescisão, acrescido de multa rescisória de [Percentual]% sobre o valor remanescente do contrato.",
       foro: "Fica eleito o foro da comarca de [Cidade da Empresa Prestadora]/[UF] para dirimir quaisquer controvérsias oriundas do presente contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.",
-      empresaNome: "",
-      empresaCnpj: "",
-      empresaEndereco: "",
+      empresaNomeDisplay: "",
+      empresaCnpjDisplay: "",
+      empresaEnderecoDisplay: "",
       empresaResponsavel: userData?.nome || "",
     },
   });
@@ -90,9 +90,9 @@ export default function NewContractPage() {
         if (docSnap.exists()) {
           const empresa = docSnap.data() as Empresa;
           setEmpresaUsuario(empresa);
-          setValue("empresaNome", empresa.nome || "Não configurado");
-          setValue("empresaCnpj", empresa.cnpj || "Não configurado");
-          setValue("empresaEndereco", empresa.endereco || "Não configurado");
+          setValue("empresaNomeDisplay", empresa.nome || "Não configurado");
+          setValue("empresaCnpjDisplay", empresa.cnpj || "Não configurado");
+          setValue("empresaEnderecoDisplay", empresa.endereco || "Não configurado");
         } else {
            toast({ title: "Dados da Empresa Não Configurados", description: "Configure o perfil da sua empresa para preenchimento automático dos dados do prestador.", variant: "default", duration: 5000});
         }
@@ -125,7 +125,7 @@ export default function NewContractPage() {
       email: data.clienteEmail,
     };
     if (data.clienteCpfCnpj && data.clienteCpfCnpj.trim() !== "") {
-      clientePayload.cpfCnpj = data.clienteCpfCnpj;
+      clientePayload.cpfCnpj = data.clienteCpfCnpj.trim();
     }
 
     const blocosEditaveisPayload: BlocosEditaveisContrato = {
@@ -137,23 +137,23 @@ export default function NewContractPage() {
       cancelamento: data.cancelamento,
     };
     if (data.foro && data.foro.trim() !== "") {
-      blocosEditaveisPayload.foro = data.foro;
+      blocosEditaveisPayload.foro = data.foro.trim();
     }
     
     const empresaPrestadorPayload: EmpresaPrestadorContrato = {
-        nome: empresaUsuario?.nome || data.empresaNome || "Empresa não informada",
+        nome: empresaUsuario?.nome || data.empresaNomeDisplay || "Empresa não informada",
     };
-    const formEmpresaCnpj = empresaUsuario?.cnpj || data.empresaCnpj;
+    const formEmpresaCnpj = empresaUsuario?.cnpj || data.empresaCnpjDisplay;
     if (formEmpresaCnpj && formEmpresaCnpj.trim() !== "") {
-        empresaPrestadorPayload.cnpj = formEmpresaCnpj;
+        empresaPrestadorPayload.cnpj = formEmpresaCnpj.trim();
     }
-    const formEmpresaEndereco = empresaUsuario?.endereco || data.empresaEndereco;
+    const formEmpresaEndereco = empresaUsuario?.endereco || data.empresaEnderecoDisplay;
     if (formEmpresaEndereco && formEmpresaEndereco.trim() !== "") {
-        empresaPrestadorPayload.endereco = formEmpresaEndereco;
+        empresaPrestadorPayload.endereco = formEmpresaEndereco.trim();
     }
     const formEmpresaResponsavel = data.empresaResponsavel || userData?.nome;
     if (formEmpresaResponsavel && formEmpresaResponsavel.trim() !== "") {
-        empresaPrestadorPayload.responsavelTecnico = formEmpresaResponsavel;
+        empresaPrestadorPayload.responsavelTecnico = formEmpresaResponsavel.trim();
     }
 
 
@@ -163,12 +163,7 @@ export default function NewContractPage() {
       cliente: clientePayload,
       blocosEditaveis: blocosEditaveisPayload,
       status: 'rascunho', 
-      assinaturas: { 
-        prestador: undefined,
-        cliente: undefined,
-        testemunha1: undefined,
-        testemunha2: undefined,
-      },
+      assinaturas: {}, // Initialize as an empty object
       dataCriacao: Timestamp.now(),
       dataUltimaModificacao: Timestamp.now(),
       empresaPrestador: empresaPrestadorPayload,
@@ -214,15 +209,15 @@ export default function NewContractPage() {
               <CardContent className="space-y-3">
                 <div>
                   <Label>Nome da Empresa</Label>
-                  <Controller name="empresaNome" control={control} render={({ field }) => <Input {...field} disabled />} />
+                  <Controller name="empresaNomeDisplay" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                 <div>
                   <Label>CNPJ</Label>
-                  <Controller name="empresaCnpj" control={control} render={({ field }) => <Input {...field} disabled />} />
+                  <Controller name="empresaCnpjDisplay" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                 <div>
                   <Label>Endereço da Empresa</Label>
-                  <Controller name="empresaEndereco" control={control} render={({ field }) => <Input {...field} disabled />} />
+                  <Controller name="empresaEnderecoDisplay" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                  <div>
                   <Label htmlFor="empresaResponsavel">Responsável Técnico (Sua Empresa)</Label>
@@ -384,3 +379,4 @@ export default function NewContractPage() {
     </div>
   );
 }
+
