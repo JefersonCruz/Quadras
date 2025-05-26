@@ -5,7 +5,7 @@ import type { Empresa } from "@/types/firestore";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, Save, Building, Search } from "lucide-react"; // Added Search icon
+import { Loader2, Save, Building, Search, Image as ImageIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useForm, Controller } from "react-hook-form";
@@ -17,7 +17,7 @@ import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import Image from "next/image";
+import NextImage from "next/image"; // Renamed to avoid conflict
 
 const companySchema = z.object({
   nome: z.string().min(3, "Nome da empresa é obrigatório."),
@@ -41,7 +41,7 @@ export default function CompanyProfilePage() {
   const [loading, setLoading] = useState(false); // For form submission
   const [loadingData, setLoadingData] = useState(true); // For initial data fetch
   const [cnpjLoading, setCnpjLoading] = useState(false); // For CNPJ lookup
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [newLogoPreview, setNewLogoPreview] = useState<string | null>(null); // For previewing newly selected logo
 
   const { control, handleSubmit, reset, setValue, watch, getValues, formState: { errors } } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
@@ -59,24 +59,26 @@ export default function CompanyProfilePage() {
     }
   });
 
-  const logotipoFile = watch("logotipoFile");
+  const logotipoFileWatcher = watch("logotipoFile");
 
   useEffect(() => {
-    if (logotipoFile && logotipoFile.length > 0) {
-      const file = logotipoFile[0];
+    if (logotipoFileWatcher && logotipoFileWatcher.length > 0) {
+      const file = logotipoFileWatcher[0];
       if (file.size > 2 * 1024 * 1024) { // 2MB size limit
         toast({ title: "Arquivo muito grande", description: "O logotipo deve ter no máximo 2MB.", variant: "destructive"});
-        setValue("logotipoFile", undefined); // Clear the file input
-        setLogoPreview(companyData?.logotipo || null); // Revert to old logo or null
+        setValue("logotipoFile", undefined); 
+        setNewLogoPreview(null); 
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setLogoPreview(reader.result as string);
+        setNewLogoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    } else {
+      setNewLogoPreview(null); // Clear preview if file is removed
     }
-  }, [logotipoFile, setValue, toast, companyData?.logotipo]);
+  }, [logotipoFileWatcher, setValue, toast]);
 
   const fetchCompanyData = useCallback(async () => {
     if (!user) return;
@@ -99,8 +101,9 @@ export default function CompanyProfilePage() {
           whatsapp: data.whatsapp || "",
           logotipoFile: undefined, 
         });
-        if (data.logotipo) setLogoPreview(data.logotipo);
+        // No need to set newLogoPreview here, it's for new uploads
       } else {
+         setCompanyData(null); // Ensure companyData is null if not found
          reset({ 
           nome: "",
           cnpj: "",
@@ -115,6 +118,7 @@ export default function CompanyProfilePage() {
         });
       }
     } catch (error) {
+      console.error("Error fetching company data:", error);
       toast({ title: "Erro ao buscar dados da empresa", variant: "destructive" });
     } finally {
       setLoadingData(false);
@@ -173,11 +177,11 @@ export default function CompanyProfilePage() {
     if (!user) return;
     setLoading(true);
     
-    let logoUrl = companyData?.logotipo || "";
+    let logoUrlToSave = companyData?.logotipo || "";
 
     if (data.logotipoFile && data.logotipoFile.length > 0) {
       const file = data.logotipoFile[0];
-       if (file.size > 2 * 1024 * 1024) { // 2MB check again before upload
+       if (file.size > 2 * 1024 * 1024) { 
         toast({ title: "Logotipo muito grande", description: "O arquivo do logotipo excede 2MB.", variant: "destructive"});
         setLoading(false);
         return;
@@ -185,7 +189,7 @@ export default function CompanyProfilePage() {
       const storageRef = ref(storage, `empresas/${user.uid}/logotipo/${file.name}`);
       try {
         const snapshot = await uploadBytes(storageRef, file);
-        logoUrl = await getDownloadURL(snapshot.ref);
+        logoUrlToSave = await getDownloadURL(snapshot.ref);
       } catch (error) {
         console.error("Firebase Storage Error:", error); 
         toast({ title: "Erro no upload do logotipo", description: "Não foi possível salvar o logotipo. Verifique o console para detalhes.", variant: "destructive" });
@@ -207,19 +211,25 @@ export default function CompanyProfilePage() {
       instagram: companyDetails.instagram || "",
       facebook: companyDetails.facebook || "",
       whatsapp: companyDetails.whatsapp || "",
-      logotipo: logoUrl,
+      logotipo: logoUrlToSave,
     };
     
     try {
       const companyRef = doc(db, "empresas", user.uid);
-      if (companyData || (await getDoc(companyRef)).exists()) {
+      // Check if document exists to decide between setDoc and updateDoc
+      const docSnap = await getDoc(companyRef);
+      if (docSnap.exists()) {
         await updateDoc(companyRef, finalData);
       } else {
-        await setDoc(companyRef, finalData);
+        await setDoc(companyRef, finalData); // Use setDoc for new documents
       }
-      setCompanyData(prev => ({...(prev || {}), ...finalData} as Empresa));
+
+      setCompanyData(prev => ({...(prev || {}), ...finalData, id: user.uid } as Empresa)); // Update local state
+      setNewLogoPreview(null); // Clear new logo preview after successful save
+      setValue("logotipoFile", undefined); // Clear the file input in the form
       toast({ title: "Perfil da empresa salvo!", description: "Suas informações foram atualizadas." });
     } catch (error) {
+      console.error("Error saving company profile:", error);
       toast({ title: "Erro ao salvar perfil", description: "Não foi possível salvar os dados.", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -227,7 +237,20 @@ export default function CompanyProfilePage() {
   };
 
   if (loadingData) {
-    return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Carregando perfil...</p></div>;
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Perfil da Empresa"
+          description="Gerencie as informações da sua empresa que aparecerão em documentos e relatórios."
+        />
+        <Card>
+          <CardContent className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" /> 
+            <p className="ml-2">Carregando perfil...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -237,8 +260,26 @@ export default function CompanyProfilePage() {
         description="Gerencie as informações da sua empresa que aparecerão em documentos e relatórios."
       />
       <Card>
+        <div className="p-6 border-b flex flex-col items-center gap-4">
+          {companyData?.logotipo ? (
+            <NextImage 
+              src={companyData.logotipo} 
+              alt="Logotipo da Empresa" 
+              width={128} 
+              height={128} 
+              className="rounded-full object-contain border-2 border-primary p-1"
+              data-ai-hint="logo company"
+            />
+          ) : (
+            <div className="w-32 h-32 rounded-full bg-muted flex items-center justify-center border-2 border-dashed border-primary">
+              <ImageIcon className="h-16 w-16 text-muted-foreground" />
+            </div>
+          )}
+          <h2 className="text-2xl font-semibold text-foreground">{companyData?.nome || "Nome da Empresa"}</h2>
+        </div>
+
         <CardHeader>
-          <CardTitle className="flex items-center"><Building className="mr-2 h-6 w-6 text-primary" /> Informações da Empresa</CardTitle>
+          <CardTitle className="flex items-center"><Building className="mr-2 h-5 w-5 text-primary" /> Detalhes da Empresa</CardTitle>
           <CardDescription>Mantenha seus dados atualizados. Use o CNPJ para preencher automaticamente alguns campos.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -254,8 +295,8 @@ export default function CompanyProfilePage() {
                 <div className="flex gap-2 items-start">
                     <Controller name="cnpj" control={control} render={({ field }) => <Input id="cnpj" {...field} placeholder="00.000.000/0000-00" className="flex-grow"/>} />
                     <Button type="button" onClick={handleCnpjLookup} disabled={cnpjLoading} variant="outline" className="shrink-0">
-                        {cnpjLoading ? <Loader2 className="animate-spin" /> : <Search />}
-                        <span className="ml-2 hidden sm:inline">Buscar Dados</span>
+                        {cnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        <span className="ml-2 hidden sm:inline">Buscar</span>
                     </Button>
                 </div>
                  {errors.cnpj && <p className="text-sm text-destructive mt-1">{errors.cnpj.message}</p>}
@@ -296,7 +337,7 @@ export default function CompanyProfilePage() {
             </div>
             
             <div>
-              <Label htmlFor="logotipoFile">Logotipo</Label>
+              <Label htmlFor="logotipoFile">Alterar/Adicionar Logotipo</Label>
               <Controller 
                 name="logotipoFile" 
                 control={control} 
@@ -312,11 +353,11 @@ export default function CompanyProfilePage() {
                 )}
               />
               <p className="text-xs text-muted-foreground mt-1">Recomendamos um logotipo quadrado (1:1). Tamanho máximo: 2MB.</p>
-              {logoPreview && (
+              {newLogoPreview && (
                 <div className="mt-4">
-                  <p className="text-sm font-medium mb-2">Pré-visualização:</p>
+                  <p className="text-sm font-medium mb-2">Pré-visualização do novo logotipo:</p>
                   <div className="w-36 h-36 rounded border bg-muted/50 flex items-center justify-center overflow-hidden">
-                    <Image src={logoPreview} alt="Preview do logotipo" width={144} height={144} className="object-contain max-w-full max-h-full" data-ai-hint="logo company" />
+                    <NextImage src={newLogoPreview} alt="Preview do novo logotipo" width={144} height={144} className="object-contain max-w-full max-h-full" data-ai-hint="logo company" />
                   </div>
                 </div>
               )}
