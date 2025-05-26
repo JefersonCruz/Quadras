@@ -12,7 +12,16 @@ const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev, conf: { distDir: "../.next" } });
 const handle = app.getRequestHandler();
 
-exports.nextApp = functions.region(region).https.onRequest((req, res) => {
+exports.nextApp = functions.region(region).https.onRequest(async (req, res) => {
   console.log("File: " + req.originalUrl); // log the page.js file that is being requested
-  return app.prepare().then(() => handle(req, res));
+  try {
+    await app.prepare();
+    return handle(req, res);
+  } catch (error) {
+    console.error("Error in nextApp onRequest handler:", error);
+    // Ensure a response is sent to prevent the function from timing out
+    if (!res.headersSent) {
+      res.status(500).send("Internal Server Error");
+    }
+  }
 });
