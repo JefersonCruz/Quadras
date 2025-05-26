@@ -31,25 +31,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        const userDocRef = doc(db, "usuarios", firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          const appUserData = userDocSnap.data() as Usuario;
-          setUserData(appUserData);
-          const idTokenResult = await firebaseUser.getIdTokenResult();
-          setIsAdmin(idTokenResult.claims.role === 'admin');
+      try {
+        if (firebaseUser) {
+          setUser(firebaseUser);
+          const userDocRef = doc(db, "usuarios", firebaseUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const appUserData = userDocSnap.data() as Usuario;
+            setUserData(appUserData);
+            // Check for admin role based on Firestore document first for simplicity
+            // For more security, custom claims via Firebase Functions are recommended for admin roles
+            setIsAdmin(appUserData.role === 'admin');
+          } else {
+            // This case might happen if user is authenticated with Firebase Auth
+            // but their Firestore document wasn't created or was deleted.
+            console.warn(`No Firestore document found for user ${firebaseUser.uid}`);
+            setUserData(null);
+            setIsAdmin(false);
+          }
         } else {
+          setUser(null);
           setUserData(null);
           setIsAdmin(false);
         }
-      } else {
-        setUser(null);
+      } catch (error) {
+        console.error("Error during auth state change processing:", error);
+        // Ensure app doesn't get stuck in loading due to an error here
+        setUser(null); // Reset to a known safe state
         setUserData(null);
         setIsAdmin(false);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
