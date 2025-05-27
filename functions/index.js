@@ -1,3 +1,4 @@
+
 import { onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import next from "next";
@@ -21,6 +22,9 @@ export const nextApp = onRequest({ region: REGION }, async (req, res) => {
     return handle(req, res); // delega o request para o Next
   } catch (err) {
     logger.error("❌ Erro no Next.js:", err);
+    if (err.stack) {
+      logger.error("Stack:", err.stack);
+    }
     if (!res.headersSent) {
       res.status(500).send("Erro interno do servidor");
     }
