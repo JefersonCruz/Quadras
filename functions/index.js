@@ -1,27 +1,28 @@
+import { onRequest } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions";
+import next from "next";
 
-const functions = require("firebase-functions");
-const next = require("next");
+const REGION = "us-central1";
+const IS_DEV = process.env.NODE_ENV !== "production";
 
-// Ensure you have the correct region if not us-central1
-// For example: functions.region('europe-west1').https.onRequest...
-const region = "us-central1"; // Change if your Firebase project uses a different default region for functions
+// Garante que o caminho .next esteja correto
+const app = next({
+  dev: IS_DEV,
+  conf: { distDir: ".next" },
+});
 
-const dev = process.env.NODE_ENV !== "production";
-// The `conf` object should point to your Next.js build output.
-// The `../.next` path is relative to the `functions` directory.
-const app = next({ dev, conf: { distDir: "../.next" } });
 const handle = app.getRequestHandler();
 
-exports.nextApp = functions.region(region).https.onRequest(async (req, res) => {
-  console.log("File: " + req.originalUrl); // log the page.js file that is being requested
+export const nextApp = onRequest({ region: REGION }, async (req, res) => {
+  logger.info("📥 Request URL:", req.originalUrl);
+
   try {
-    await app.prepare();
-    return handle(req, res);
-  } catch (error) {
-    console.error("Error in nextApp onRequest handler:", error);
-    // Ensure a response is sent to prevent the function from timing out
+    await app.prepare(); // prepara o app Next.js
+    return handle(req, res); // delega o request para o Next
+  } catch (err) {
+    logger.error("❌ Erro no Next.js:", err);
     if (!res.headersSent) {
-      res.status(500).send("Internal Server Error");
+      res.status(500).send("Erro interno do servidor");
     }
   }
 });
