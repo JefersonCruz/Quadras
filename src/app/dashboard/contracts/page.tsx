@@ -4,11 +4,11 @@
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, FileSignature, Search, Loader2, Share2, Copy, ExternalLink } from "lucide-react";
+import { PlusCircle, FileSignature, Search, Loader2, Share2, Copy, ExternalLink, Eye } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
-import type { Contrato } from "@/types/firestore";
+import type { Contrato, AssinaturaDetalhes } from "@/types/firestore";
 import { collection, query, where, getDocs, orderBy, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +34,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Function to copy text to clipboard
 const copyToClipboard = (text: string, toastFn: (options: any) => void) => {
@@ -45,6 +46,13 @@ const copyToClipboard = (text: string, toastFn: (options: any) => void) => {
   });
 };
 
+const formatSignatureStatus = (signature?: AssinaturaDetalhes) => {
+  if (signature?.dataHora) {
+    return `Assinado em ${format(signature.dataHora.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} por ${signature.nome || 'N/A'}`;
+  }
+  return "Pendente";
+};
+
 
 export default function ContractsPage() {
   const { user } = useAuth();
@@ -54,6 +62,9 @@ export default function ContractsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedContractForSharing, setSelectedContractForSharing] = useState<Contrato | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [selectedContractForViewing, setSelectedContractForViewing] = useState<Contrato | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+
 
   const APP_BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:9003';
 
@@ -203,6 +214,11 @@ export default function ContractsPage() {
     return `${APP_BASE_URL}/sign-contract/${contractId}/${signerType}`;
   };
 
+  const openViewDialog = (contract: Contrato) => {
+    setSelectedContractForViewing(contract);
+    setIsViewDialogOpen(true);
+  };
+
 
   return (
     <div className="space-y-6">
@@ -281,7 +297,9 @@ export default function ContractsPage() {
                             <Share2 className="mr-1 h-3 w-3" /> Compartilhar
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" disabled>Ver</Button>
+                        <Button variant="outline" size="sm" onClick={() => openViewDialog(contract)}>
+                          <Eye className="mr-1 h-3 w-3" /> Ver
+                        </Button>
                         <Button variant="outline" size="sm" disabled={contract.status !== 'rascunho'}>Editar</Button>
                       </TableCell>
                     </TableRow>
@@ -353,6 +371,93 @@ export default function ContractsPage() {
               </p>
             </div>
             <DialogFooter className="sm:justify-start">
+              <DialogClose asChild>
+                <Button type="button" variant="secondary">
+                  Fechar
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {selectedContractForViewing && (
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Detalhes do Contrato</DialogTitle>
+              <DialogDescription>
+                ID do Contrato: {selectedContractForViewing.id}
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[70vh] p-4">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold text-sm mb-1">Informações Gerais</h4>
+                  <p className="text-xs"><strong>Tipo:</strong> {selectedContractForViewing.tipo === 'padrão' ? 'Padrão' : 'Emergencial'}</p>
+                  <p className="text-xs"><strong>Status:</strong> {getStatusLabel(selectedContractForViewing.status)}</p>
+                  <p className="text-xs"><strong>Criado em:</strong> {selectedContractForViewing.dataCriacao ? format(selectedContractForViewing.dataCriacao.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}</p>
+                   {selectedContractForViewing.dataEnvioAssinaturas && <p className="text-xs"><strong>Enviado para Assinatura:</strong> {format(selectedContractForViewing.dataEnvioAssinaturas.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>}
+                  {selectedContractForViewing.dataFinalizacaoAssinaturas && <p className="text-xs"><strong>Finalizado em:</strong> {format(selectedContractForViewing.dataFinalizacaoAssinaturas.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>}
+                </div>
+                <hr/>
+                <div>
+                  <h4 className="font-semibold text-sm mb-1">Cliente</h4>
+                  <p className="text-xs"><strong>Nome:</strong> {selectedContractForViewing.cliente.nome}</p>
+                  <p className="text-xs"><strong>Email:</strong> {selectedContractForViewing.cliente.email}</p>
+                  <p className="text-xs"><strong>CPF/CNPJ:</strong> {selectedContractForViewing.cliente.cpfCnpj || "N/A"}</p>
+                </div>
+                <hr/>
+                {selectedContractForViewing.empresaPrestador && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Prestador de Serviço</h4>
+                    <p className="text-xs"><strong>Empresa:</strong> {selectedContractForViewing.empresaPrestador.nome || "N/A"}</p>
+                    <p className="text-xs"><strong>Responsável:</strong> {selectedContractForViewing.empresaPrestador.responsavelTecnico || "N/A"}</p>
+                    <p className="text-xs"><strong>CNPJ:</strong> {selectedContractForViewing.empresaPrestador.cnpj || "N/A"}</p>
+                    <p className="text-xs"><strong>Endereço:</strong> {selectedContractForViewing.empresaPrestador.endereco || "N/A"}</p>
+                  </div>
+                )}
+                 <hr/>
+                <div>
+                  <h4 className="font-semibold text-sm mb-1">Cláusulas Principais</h4>
+                  <p className="text-xs whitespace-pre-wrap"><strong>Objeto:</strong> {selectedContractForViewing.blocosEditaveis.objetoDoContrato}</p>
+                  <p className="text-xs whitespace-pre-wrap mt-1"><strong>Prazo de Execução:</strong> {selectedContractForViewing.blocosEditaveis.prazoDeExecucao}</p>
+                  <p className="text-xs whitespace-pre-wrap mt-1"><strong>Condições de Pagamento:</strong> {selectedContractForViewing.blocosEditaveis.condicoesDePagamento}</p>
+                </div>
+                <hr/>
+                {selectedContractForViewing.testemunhas && selectedContractForViewing.testemunhas.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Testemunhas</h4>
+                    {selectedContractForViewing.testemunhas.map((testemunha, index) => (
+                      <div key={index} className="mb-1">
+                        <p className="text-xs"><strong>Testemunha {index + 1}:</strong> {testemunha.nome} (Email: {testemunha.email})</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <hr/>
+                <div>
+                  <h4 className="font-semibold text-sm mb-1">Status das Assinaturas</h4>
+                  <p className="text-xs"><strong>Prestador:</strong> {formatSignatureStatus(selectedContractForViewing.assinaturas?.prestador)}</p>
+                  <p className="text-xs"><strong>Cliente:</strong> {formatSignatureStatus(selectedContractForViewing.assinaturas?.cliente)}</p>
+                  <p className="text-xs"><strong>Testemunha 1:</strong> {selectedContractForViewing.testemunhas?.[0] ? formatSignatureStatus(selectedContractForViewing.assinaturas?.testemunha1) : 'N/A'}</p>
+                  <p className="text-xs"><strong>Testemunha 2:</strong> {selectedContractForViewing.testemunhas?.[1] ? formatSignatureStatus(selectedContractForViewing.assinaturas?.testemunha2) : 'N/A'}</p>
+                </div>
+
+                {selectedContractForViewing.tipo === 'emergencial' && (
+                  <>
+                  <hr/>
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Detalhes Emergenciais</h4>
+                    {selectedContractForViewing.taxaDeslocamento !== undefined && <p className="text-xs"><strong>Taxa de Deslocamento:</strong> R$ {selectedContractForViewing.taxaDeslocamento.toFixed(2)}</p>}
+                    {selectedContractForViewing.termosEmergencial && <p className="text-xs mt-1 whitespace-pre-wrap"><strong>Termos:</strong> {selectedContractForViewing.termosEmergencial}</p>}
+                  </div>
+                  </>
+                )}
+
+              </div>
+            </ScrollArea>
+            <DialogFooter className="sm:justify-start pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="secondary">
                   Fechar
