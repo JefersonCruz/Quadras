@@ -3,11 +3,10 @@
 
 import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
-import type { ReactNode } from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { auth, db } from "@/lib/firebase/config";
-import type { Firestore } from "firebase/firestore";
 import { doc, getDoc } from "firebase/firestore";
+import type { Firestore } from "firebase/firestore";
 import type { Usuario } from "@/types/firestore";
 import { Loader2 } from "lucide-react";
 
@@ -25,12 +24,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<Usuario | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Start as true
 
   useEffect(() => {
-    let unsubscribe;
+    let unsubscribe: (() => void) | undefined;
+    let didUnsubscribe = false; // Flag to prevent state updates after unmount
+
+    // Fallback timeout to ensure loading doesn't get stuck
+    const loadingTimeout = setTimeout(() => {
+      if (!didUnsubscribe && loading) {
+        console.warn("AuthContext: Loading timeout reached (15s). Forcing loading to false due to persistent auth state resolution delay (possibly network issues).");
+        if (!didUnsubscribe) { // Check again before setting state
+            setLoading(false);
+            setUser(null);
+            setUserData(null);
+            setIsAdmin(false);
+        }
+      }
+    }, 15000); // 15 seconds timeout
+
     try {
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (didUnsubscribe) return; // Prevent updates if component unmounted
+
         try {
           if (firebaseUser) {
             setUser(firebaseUser);
@@ -40,9 +56,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (userDocSnap.exists()) {
               const appUserData = userDocSnap.data() as Usuario;
               setUserData(appUserData);
-              setIsAdmin(appUserData.role === 'admin');
+              setIsAdmin(appUserData.role === "admin");
             } else {
-              console.warn(`No Firestore document found for user ${firebaseUser.uid}. User will be treated as non-admin with no specific app data.`);
+              console.warn(
+                `AuthContext: Documento do usuário ${firebaseUser.uid} não encontrado.`
+              );
               setUserData(null);
               setIsAdmin(false);
             }
@@ -51,42 +69,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserData(null);
             setIsAdmin(false);
           }
-        } catch (error: any) {
-          // This catch is for errors during Firestore document fetching or processing
-          console.warn("AuthContext: Error during user data processing:", error);
-          if (error.code === 'auth/network-request-failed') {
-            console.warn("AuthContext: Firebase Authentication network request failed. User will be treated as unauthenticated.");
+        } catch (error) {
+          const err = error as { code?: string; message?: string };
+          console.warn("AuthContext: Erro ao buscar dados do usuário:", err);
+          if (err.code === "auth/network-request-failed") {
+            console.warn("⚠️ Firebase Auth: Network request failed. Check internet connection and Firebase service status.");
           }
-          setUser(null);
-          setUserData(null);
-          setIsAdmin(false);
+          // Reset user state on error during user data fetch
+          if (!didUnsubscribe) {
+            setUser(null);
+            setUserData(null);
+            setIsAdmin(false);
+          }
         } finally {
-          // console.log("AuthContext: Setting loading to false from onAuthStateChanged callback's finally block.");
-          setLoading(false);
+          if (!didUnsubscribe) {
+            setLoading(false);
+            clearTimeout(loadingTimeout); // Clear timeout if successfully loaded/processed
+          }
         }
       });
-    } catch (e: any) {
-      // This catch is for errors during the onAuthStateChanged listener setup itself
-      console.error("AuthContext: Error setting up onAuthStateChanged listener:", e);
-      setUser(null);
-      setUserData(null);
-      setIsAdmin(false);
-      setLoading(false); // Ensure loading is false if setup fails
+    } catch (setupError) {
+      console.error("AuthContext: Erro ao configurar listener de autenticação:", setupError);
+      if (!didUnsubscribe) {
+        setUser(null);
+        setUserData(null);
+        setIsAdmin(false);
+        setLoading(false);
+        clearTimeout(loadingTimeout); // Clear timeout on setup error
+      }
     }
 
     return () => {
+      didUnsubscribe = true;
       if (unsubscribe) {
-        // console.log("AuthContext: Unsubscribing from onAuthStateChanged.");
         unsubscribe();
       }
+      clearTimeout(loadingTimeout); // Clear timeout on unmount
     };
-  }, []); // Empty dependency array is correct for this effect
+  }, []); // Empty dependency array: run only on mount and unmount
 
   if (loading) {
-    // Simplified loading state
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-background text-muted-foreground">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-sm mt-4">Carregando autenticação...</p>
       </div>
     );
   }
@@ -100,7 +126,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
