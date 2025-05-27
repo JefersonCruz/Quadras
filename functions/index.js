@@ -44,7 +44,6 @@ export const nextApp = onRequest({ region: REGION }, async (req, res) => {
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 
 export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{contratoId}", async (event) => {
-    // Usar event.data.before e event.data.after para v2
     const beforeData = event.data?.before?.data();
     const afterData = event.data?.after?.data();
     const contratoId = event.params.contratoId;
@@ -54,53 +53,47 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
       logger.info(`Contrato ${contratoId} foi excluído. Nenhuma ação de timestamp.`);
       return null;
     }
-    // Se beforeData não existe, é uma criação, não uma atualização.
-    // Poderíamos tratar a criação também, mas o prompt foca na assinatura do cliente que é uma atualização.
-    if (!beforeData) {
-      logger.info(`Contrato ${contratoId} foi criado. Esperando assinatura do cliente para timestamp.`);
+
+    const statusAntes = beforeData?.status;
+    const statusDepois = afterData.status;
+
+    // Só processar se o status mudou para 'assinado'
+    if (statusDepois !== 'assinado' || statusAntes === 'assinado') {
+      if (statusDepois !== 'assinado') {
+        logger.info(`Contrato ${contratoId} não está com status 'assinado' (status atual: ${statusDepois}). Nenhuma ação de timestamp.`);
+      } else { // statusAntes era 'assinado' e statusDepois também é 'assinado'
+        logger.info(`Status do contrato ${contratoId} já era 'assinado' e permaneceu 'assinado'. Nenhuma nova ação de timestamp.`);
+      }
       return null;
     }
 
-    // Só processar se mudou o campo "assinaturas.cliente.dataHora"
-    const assinaturaAntes = beforeData.assinaturas?.cliente?.dataHora || null;
-    const assinaturaDepois = afterData.assinaturas?.cliente?.dataHora || null;
+    logger.info(`Contrato ${contratoId} mudou para status 'assinado'. Processando para registro na blockchain via OpenTimestamps.`);
 
-    if (assinaturaAntes === assinaturaDepois || !assinaturaDepois) {
-      logger.info(`Assinatura do cliente para o contrato ${contratoId} não foi alterada ou não existe. Nenhuma ação de timestamp.`);
-      return null;
-    }
-
-    logger.info(`Processando contrato ${contratoId} para registro na blockchain via OpenTimestamps.`);
-
-    // Gera o hash do contrato inteiro após assinatura
-    const contratoJson = JSON.stringify(afterData); // Usar afterData
+    // Gera o hash do contrato inteiro após todas as assinaturas
+    const contratoJson = JSON.stringify(afterData);
     
     // A biblioteca opentimestamps espera um Uint8Array para fromBytes
     const contratoBuffer = Buffer.from(contratoJson, 'utf8');
     const digest = ots.DetachedTimestampFile.fromBytes(
-      new Uint8Array(contratoBuffer), // Converter Buffer para Uint8Array
-      ots.Ops.OpSHA256() // Chamar OpSHA256 como uma função
+      new Uint8Array(contratoBuffer),
+      ots.Ops.OpSHA256()
     );
 
-    // Solicita o carimbo de tempo na blockchain
-    // O método stamp pode precisar de configuração de calendário se os padrões não funcionarem.
-    // A biblioteca pode usar servidores de calendário públicos por padrão.
     try {
       await ots.stamp(digest);
       const timestampBytes = await digest.serializeToBytes();
       const timestampBase64 = Buffer.from(timestampBytes).toString("base64");
 
-      // Armazena o hash e timestamp no Firestore (subcoleção do contrato)
       await db
         .collection("contratos")
         .doc(contratoId)
-        .collection("blockchainProof") // Nome mais descritivo
-        .doc("opentimestamps_sha256")    // ID do documento mais descritivo
+        .collection("blockchainProof")
+        .doc("opentimestamps_sha256")
         .set({
           hashTipo: "sha256",
-          timestampFileBase64: timestampBase64, // Nome do campo mais claro
+          timestampFileBase64: timestampBase64,
           registradoEm: admin.firestore.FieldValue.serverTimestamp(),
-          dadosContratoSnapshot: contratoJson, // Opcional: snapshot dos dados carimbados para referência
+          dadosContratoSnapshot: contratoJson,
         });
 
       logger.info(`Contrato ${contratoId} registrado na blockchain via OpenTimestamps com sucesso.`);
