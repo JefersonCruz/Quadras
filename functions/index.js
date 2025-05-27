@@ -24,16 +24,13 @@ const app = next({
 const handle = app.getRequestHandler();
 
 export const nextApp = onRequest({ region: REGION }, async (req, res) => {
-  logger.info("📥 Request URL:", req.originalUrl);
+  logger.info("NextApp Request URL:", req.originalUrl);
 
   try {
     await app.prepare(); // prepara o app Next.js
     return handle(req, res); // delega o request para o Next
   } catch (err) {
-    logger.error("❌ Erro no Next.js:", err);
-    if (err.stack) {
-      logger.error("Stack:", err.stack);
-    }
+    logger.error("Error in nextApp onRequest handler:", err, { stack: err.stack });
     if (!res.headersSent) {
       res.status(500).send("Erro interno do servidor");
     }
@@ -44,30 +41,34 @@ export const nextApp = onRequest({ region: REGION }, async (req, res) => {
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 
 export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{contratoId}", async (event) => {
+    const contratoId = event.params.contratoId;
+    logger.info(`[registrarAssinaturaNaBlockchain] Triggered for contratoId: ${contratoId}`);
+
     const beforeData = event.data?.before?.data();
     const afterData = event.data?.after?.data();
-    const contratoId = event.params.contratoId;
 
     // Verificar se o documento foi excluído (afterData não existirá)
     if (!afterData) {
-      logger.info(`Contrato ${contratoId} foi excluído. Nenhuma ação de timestamp.`);
+      logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} foi excluído. Nenhuma ação de timestamp.`);
       return null;
     }
 
     const statusAntes = beforeData?.status;
     const statusDepois = afterData.status;
 
+    logger.info(`[registrarAssinaturaNaBlockchain] Status before: ${statusAntes}, Status after: ${statusDepois} for ${contratoId}`);
+
     // Só processar se o status mudou para 'assinado'
     if (statusDepois !== 'assinado' || statusAntes === 'assinado') {
       if (statusDepois !== 'assinado') {
-        logger.info(`Contrato ${contratoId} não está com status 'assinado' (status atual: ${statusDepois}). Nenhuma ação de timestamp.`);
+        logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} não está com status 'assinado' (status atual: ${statusDepois}). Nenhuma ação de timestamp.`);
       } else { // statusAntes era 'assinado' e statusDepois também é 'assinado'
-        logger.info(`Status do contrato ${contratoId} já era 'assinado' e permaneceu 'assinado'. Nenhuma nova ação de timestamp.`);
+        logger.info(`[registrarAssinaturaNaBlockchain] Status do contrato ${contratoId} já era 'assinado' e permaneceu 'assinado'. Nenhuma nova ação de timestamp.`);
       }
       return null;
     }
 
-    logger.info(`Contrato ${contratoId} mudou para status 'assinado'. Processando para registro na blockchain via OpenTimestamps.`);
+    logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} mudou para status 'assinado'. Iniciando processo de registro na blockchain via OpenTimestamps.`);
 
     // Gera o hash do contrato inteiro após todas as assinaturas
     const contratoJson = JSON.stringify(afterData);
@@ -78,29 +79,38 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
       new Uint8Array(contratoBuffer),
       ots.Ops.OpSHA256()
     );
+    logger.info(`[registrarAssinaturaNaBlockchain] Hash gerado para contrato ${contratoId}.`);
 
     try {
+      logger.info(`[registrarAssinaturaNaBlockchain] Enviando hash para OpenTimestamps para ${contratoId}...`);
       await ots.stamp(digest);
+      logger.info(`[registrarAssinaturaNaBlockchain] Hash para ${contratoId} carimbado com sucesso por OpenTimestamps.`);
+      
       const timestampBytes = await digest.serializeToBytes();
       const timestampBase64 = Buffer.from(timestampBytes).toString("base64");
+      logger.info(`[registrarAssinaturaNaBlockchain] Arquivo de timestamp serializado para Base64 para ${contratoId}.`);
+
+      const proofData = {
+        hashTipo: "sha256",
+        timestampFileBase64: timestampBase64,
+        registradoEm: admin.firestore.FieldValue.serverTimestamp(),
+        dadosContratoSnapshot: contratoJson, // Snapshot do contrato no momento do timestamp
+      };
 
       await db
         .collection("contratos")
         .doc(contratoId)
         .collection("blockchainProof")
         .doc("opentimestamps_sha256")
-        .set({
-          hashTipo: "sha256",
-          timestampFileBase64: timestampBase64,
-          registradoEm: admin.firestore.FieldValue.serverTimestamp(),
-          dadosContratoSnapshot: contratoJson,
-        });
+        .set(proofData);
 
-      logger.info(`Contrato ${contratoId} registrado na blockchain via OpenTimestamps com sucesso.`);
+      logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} registrado na blockchain via OpenTimestamps com sucesso. Prova salva em subcoleção.`);
     } catch (error) {
-      logger.error(`Erro ao registrar contrato ${contratoId} com OpenTimestamps:`, error);
-      // Você pode querer adicionar uma lógica para tentar novamente ou notificar
+      logger.error(`[registrarAssinaturaNaBlockchain] Erro ao registrar contrato ${contratoId} com OpenTimestamps ou salvar prova:`, error, { stack: error.stack });
+      // Você pode querer adicionar uma lógica para tentar novamente ou notificar o admin
+      // Ex: await db.collection("errosRegistrosBlockchain").add({ contratoId, erro: error.message, timestamp: admin.firestore.FieldValue.serverTimestamp() });
     }
 
     return null;
   });
+
