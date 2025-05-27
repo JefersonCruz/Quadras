@@ -90,9 +90,11 @@ export default function SignContractPage() {
               break;
             case 'provider':
               currentSignerKey = 'prestador';
+              // The name displayed for the provider.
+              // The actual signing name for the provider (if rules are strict) will be handled in handleSignContract.
               name = contractData.empresaPrestador?.responsavelTecnico || contractData.empresaPrestador?.nome || "Prestador de Serviço";
+              email = contractData.empresaPrestador?.email; 
               roleDesc = `Prestador (${name})`;
-              // Note: Email for provider signing via link would ideally be pre-verified or part of token auth
               break;
             default:
               setError("Tipo de assinante desconhecido.");
@@ -100,11 +102,12 @@ export default function SignContractPage() {
               return;
           }
 
-           if (!name && signerTypeParam !== 'provider') { // Provider might not have name pre-filled if createdBy is just UID
+           if (!name && (signerTypeParam !== 'provider' || !(contractData.empresaPrestador?.nome || contractData.empresaPrestador?.responsavelTecnico) )) {
              setError(`Detalhes para ${roleDesc || signerTypeParam} não encontrados ou não aplicáveis neste contrato.`);
+             setLoading(false);
              return;
            }
-          setSignerContext({ keyInFirestore: currentSignerKey, name: name || "Prestador de Serviço", email, roleDescription: roleDesc });
+          setSignerContext({ keyInFirestore: currentSignerKey, name: name || "N/A", email, roleDescription: roleDesc });
 
         } else {
           setError("Contrato não encontrado. Verifique o link ou se você tem permissão para acessá-lo.");
@@ -112,18 +115,18 @@ export default function SignContractPage() {
       } catch (err: any) {
         console.error("Erro ao buscar contrato:", err);
         setError(err.message || "Ocorreu um erro ao buscar o contrato.");
-        toast({
-          title: "Erro ao carregar contrato",
-          description: "Não foi possível carregar os dados do contrato.",
-          variant: "destructive",
-        });
+        // toast({ // Toast removed from here as it's in dependency array and might cause loops on error
+        //   title: "Erro ao carregar contrato",
+        //   description: "Não foi possível carregar os dados do contrato.",
+        //   variant: "destructive",
+        // });
       } finally {
         setLoading(false);
       }
     };
 
     fetchContract();
-  }, [contractId, signerTypeParam, toast]);
+  }, [contractId, signerTypeParam]);
 
   const isAlreadySignedByCurrentParty = () => {
     if (!contract || !signerContext || !contract.assinaturas || !signerContext.keyInFirestore) return false;
@@ -149,15 +152,39 @@ export default function SignContractPage() {
         const contractRef = doc(db, "contratos", contract.id);
         
         const signatureData: AssinaturaDetalhes = {
-            nome: signerContext.name,
+            nome: "", // Placeholder, will be overwritten
             dataHora: Timestamp.now(),
-        };
-        if (signerContext.email) { 
-            signatureData.email = signerContext.email;
+          };
+
+        // Determine the correct name and email for the signature record
+        // This MUST align with what the security rules expect for validation if they are strict on name.
+        if (signerTypeParam === 'client' && contract.cliente) {
+            signatureData.nome = contract.cliente.nome;
+            if (contract.cliente.email) signatureData.email = contract.cliente.email;
+        } else if (signerTypeParam === 'witness1' && contract.testemunhas?.[0]) {
+            signatureData.nome = contract.testemunhas[0].nome;
+            if (contract.testemunhas[0].email) signatureData.email = contract.testemunhas[0].email;
+        } else if (signerTypeParam === 'witness2' && contract.testemunhas?.[1]) {
+            signatureData.nome = contract.testemunhas[1].nome;
+            if (contract.testemunhas[1].email) signatureData.email = contract.testemunhas[1].email;
+        } else if (signerTypeParam === 'provider') {
+            // Firestore rule for provider name check: incomingData().assinaturas.prestador.nome == contractResource().empresaPrestador.responsavelTecnico
+            // So, 'responsavelTecnico' MUST be set in the contract for the provider to sign successfully with this rule.
+            if (contract.empresaPrestador?.responsavelTecnico) {
+                signatureData.nome = contract.empresaPrestador.responsavelTecnico;
+            } else {
+                toast({ title: "Erro de Configuração do Contrato", description: "Não é possível assinar como prestador: O 'Responsável Técnico' da empresa não está definido nos dados do contrato. Contate o administrador.", variant: "destructive", duration: 7000 });
+                setIsSigning(false);
+                return;
+            }
+            if (contract.empresaPrestador?.email) signatureData.email = contract.empresaPrestador.email;
+        } else {
+            // Fallback, but ideally this case shouldn't be reached if signerContext is always valid.
+            toast({ title: "Erro Interno", description: "Tipo de assinante inválido para determinar o nome da assinatura.", variant: "destructive" });
+            setIsSigning(false);
+            return;
         }
-        // For production, capture IP and UserAgent securely, e.g., via a Cloud Function.
-        // signatureData.ip = "CAPTURED_IP_ADDRESS"; 
-        // signatureData.userAgent = navigator.userAgent;
+
 
         const updatedSignatures: AssinaturasContrato = {
           ...(contract.assinaturas || {}),
@@ -165,31 +192,37 @@ export default function SignContractPage() {
         };
 
         // Determine new status
-        let newStatus: Contrato['status'] = 'parcialmente_assinado';
+        let newStatus: Contrato['status'] = contract.status; 
+        const allSignaturesMap = { ...updatedSignatures };
         let allRequiredSigned = true;
 
-        // Check client signature
-        if (!updatedSignatures.cliente?.dataHora) allRequiredSigned = false;
-        // Check provider (prestador) signature
-        if (!updatedSignatures.prestador?.dataHora) allRequiredSigned = false;
+        if (!allSignaturesMap.cliente?.dataHora) allRequiredSigned = false;
+        if (!allSignaturesMap.prestador?.dataHora) allRequiredSigned = false; 
         
-        // Check witnesses only if they are defined in the contract
         if (contract.testemunhas && contract.testemunhas.length > 0) {
-            if (!updatedSignatures.testemunha1?.dataHora) allRequiredSigned = false;
-            if (contract.testemunhas.length > 1 && !updatedSignatures.testemunha2?.dataHora) allRequiredSigned = false;
+            if (!allSignaturesMap.testemunha1?.dataHora) allRequiredSigned = false;
+            if (contract.testemunhas.length > 1 && !allSignaturesMap.testemunha2?.dataHora) {
+                allRequiredSigned = false;
+            }
+        } else {
+          // If no witnesses are defined in the contract, they are not required for it to be 'assinado'
         }
         
         if (allRequiredSigned) {
             newStatus = 'assinado';
+        } else if (Object.values(allSignaturesMap).some(sig => sig?.dataHora)) {
+            newStatus = 'parcialmente_assinado';
+        } else if (contract.status === 'rascunho') { // If it was rascunho and first signature comes in
+             newStatus = 'pendente_assinaturas'; // Or 'parcialmente_assinado' if preferred
         }
         
-        const updatePayload: any = {
+        const updatePayload: Partial<Contrato> = {
           assinaturas: updatedSignatures,
           status: newStatus,
           dataUltimaModificacao: Timestamp.now(),
         };
 
-        if (newStatus === 'assinado') {
+        if (newStatus === 'assinado' && contract.status !== 'assinado') {
             updatePayload.dataFinalizacaoAssinaturas = Timestamp.now();
         }
         
@@ -203,7 +236,7 @@ export default function SignContractPage() {
             dataFinalizacaoAssinaturas: newStatus === 'assinado' ? updatePayload.dataFinalizacaoAssinaturas : prev.dataFinalizacaoAssinaturas,
         }) : null);
 
-        toast({ title: "Contrato Assinado!", description: `Obrigado, ${signerContext.name}. Sua assinatura foi registrada.`});
+        toast({ title: "Contrato Assinado!", description: `Obrigado, ${signatureData.nome}. Sua assinatura foi registrada.`});
 
     } catch (error: any) {
         console.error("Erro ao assinar contrato:", error);
