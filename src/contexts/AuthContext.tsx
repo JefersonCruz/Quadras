@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               console.warn(
                 `AuthContext: User document ${firebaseUser.uid} not found.`
               );
-              setUserData(null); // Ensure userData is reset if doc not found
+              setUserData(null); 
               setIsAdmin(false);
             }
           } else {
@@ -79,7 +79,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               "⚠️ Firebase Auth: Network request failed. Check internet connection and Firebase service status."
             );
           }
-          // Reset user state on error during user data fetch
           if (!didUnsubscribe) {
             setUser(null);
             setUserData(null);
@@ -87,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } finally {
           if (!didUnsubscribe) {
-            setAuthResolved(true); // Mark authentication as resolved
+            setAuthResolved(true); 
             clearTimeout(loadingTimeout);
           }
         }
@@ -101,7 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         setUserData(null);
         setIsAdmin(false);
-        setAuthResolved(true); // Resolve auth even on setup error to prevent freeze
+        setAuthResolved(true); 
         clearTimeout(loadingTimeout);
       }
     }
@@ -111,13 +110,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (unsubscribe) {
         unsubscribe();
       }
-      clearTimeout(loadingTimeout);
+      clearTimeout(loadingTimeout); 
     };
   }, []); // Empty dependency array: run only on mount and unmount
 
   if (!authResolved) {
-    // This UI is rendered on the server and on the initial client render,
-    // before the useEffect hook runs and auth state is resolved.
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 bg-background text-muted-foreground">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -126,8 +123,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  // Once authResolved is true (only on the client, after useEffect),
-  // we provide the actual context and render the children.
   return (
     <AuthContext.Provider value={{ user, userData, isAdmin, loading: !authResolved, db }}>
       {children}
