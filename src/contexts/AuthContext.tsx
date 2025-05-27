@@ -10,8 +10,7 @@ import type { Firestore } from "firebase/firestore";
 import { doc, getDoc } from "firebase/firestore";
 import type { Usuario } from "@/types/firestore";
 import { Loader2 } from "lucide-react";
-import { AppSidebarSkeleton } from "@/components/layout/AppSidebarSkeleton";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+// Removed AppSidebarSkeleton and SidebarProvider imports from here as they are no longer used in this component's loading state.
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -43,8 +42,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsAdmin(appUserData.role === 'admin');
           } else {
             console.warn(`No Firestore document found for user ${firebaseUser.uid}. User will be treated as non-admin with no specific app data.`);
-            setUserData(null); // Explicitly set to null
-            setIsAdmin(false);   // Explicitly set to false
+            setUserData(null);
+            setIsAdmin(false);
           }
         } else {
           setUser(null);
@@ -54,7 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (error) {
         console.error("Error during auth state change processing:", error);
         // Ensure app doesn't get stuck in loading due to an error here
-        setUser(null); // Reset to a known safe state
+        setUser(null);
         setUserData(null);
         setIsAdmin(false);
       } finally {
@@ -66,24 +65,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   if (loading) {
+    // Simplified loading state
     return (
-      <SidebarProvider defaultOpen={true}>
-        <AppSidebarSkeleton />
-        <SidebarInset>
-          {/* Placeholder for AppHeader */}
-          <div className="sticky top-0 z-30 flex h-16 items-center border-b bg-background/80 px-4 md:px-6">
-            <div className="flex-1" />
-            <div className="flex items-center gap-4">
-              {/* Placeholder for user menu icon skeleton */}
-              <div className="h-8 w-8 rounded-full bg-muted" />
-            </div>
-          </div>
-          {/* Placeholder for main content with spinner */}
-          <main className="flex flex-1 items-center justify-center p-4 md:p-6 lg:p-8">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
     );
   }
 
