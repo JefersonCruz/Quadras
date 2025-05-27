@@ -17,8 +17,13 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
-        pathname: '/**', // necessário para habilitar todos os caminhos
+        pathname: '/**',
       },
+    ],
+  },
+  experimental: {
+    allowedDevOrigins: [
+      'https://9003-firebase-studio-1748142985465.cluster-duylic2g3fbzerqpzxxbw6helm.cloudworkstations.dev'
     ],
   },
 };

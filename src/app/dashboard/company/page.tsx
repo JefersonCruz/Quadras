@@ -30,7 +30,7 @@ const companySchema = z.object({
   facebook: z.string().optional().or(z.literal('')).default(""),
   whatsapp: z.string().optional().or(z.literal('')).default(""),
   logotipoFile: z.custom<FileList>().optional(),
-  bannerFile: z.custom<FileList>().optional(),
+  bannerFile: z.custom<FileList>().optional(), // Added for banner
 });
 
 type CompanyFormData = z.infer<typeof companySchema>;
@@ -69,7 +69,7 @@ export default function CompanyProfilePage() {
   useEffect(() => {
     if (logotipoFileWatcher && logotipoFileWatcher.length > 0) {
       const file = logotipoFileWatcher[0];
-      if (file.size > 2 * 1024 * 1024) {
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit for logo
         toast({ title: "Logotipo muito grande", description: "O arquivo do logotipo deve ter no máximo 2MB.", variant: "destructive"});
         setValue("logotipoFile", undefined);
         setNewLogoPreview(null);
@@ -123,7 +123,7 @@ export default function CompanyProfilePage() {
           bannerFile: undefined,
         });
       } else {
-         setCompanyData(null);
+         setCompanyData(null); // Important to set to null if no data
          reset({
           nome: "", cnpj: "", email: user.email || "", telefone: "", endereco: "", site: "", instagram: "", facebook: "", whatsapp: "",
           logotipoFile: undefined, bannerFile: undefined,
@@ -154,10 +154,18 @@ export default function CompanyProfilePage() {
     }
     setCnpjLoading(true);
     try {
+      // Using a try-catch for the fetch call itself.
       const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanedCnpj}`);
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "CNPJ não encontrado ou erro na API.");
+        // Attempt to parse error from BrasilAPI if possible
+        let errorMsg = "CNPJ não encontrado ou erro na API BrasilAPI.";
+        try {
+            const errorData = await response.json();
+            errorMsg = errorData.message || errorData.type || errorMsg;
+        } catch (parseError) {
+            // Ignore if error response is not JSON
+        }
+        throw new Error(errorMsg);
       }
       const data = await response.json();
       setValue("nome", data.nome_fantasia || data.razao_social || getValues("nome") || "");
@@ -191,14 +199,15 @@ export default function CompanyProfilePage() {
       // Handle logo upload
       if (data.logotipoFile && data.logotipoFile.length > 0) {
         const file = data.logotipoFile[0];
-        if (file.size > 2 * 1024 * 1024) {
+        if (file.size > 2 * 1024 * 1024) { // Re-check size on submit
           toast({ title: "Logotipo muito grande", description: "O arquivo do logotipo excede 2MB.", variant: "destructive"});
           setLoading(false); return;
         }
         const storageRef = ref(storage, `empresas/${user.uid}/logotipo/${Date.now()}_${file.name}`);
         const snapshot = await uploadBytes(storageRef, file);
         logoUrlToSave = await getDownloadURL(snapshot.ref);
-        if (companyData?.logotipo && companyData.logotipo !== logoUrlToSave) { // Delete old logo if new one is uploaded
+        // Delete old logo if a new one is uploaded and there was an old one
+        if (companyData?.logotipo && companyData.logotipo !== logoUrlToSave) {
             try { await deleteObject(ref(storage, companyData.logotipo)); } catch (e) { console.warn("Could not delete old logo", e); }
         }
       }
@@ -206,21 +215,22 @@ export default function CompanyProfilePage() {
       // Handle banner upload
       if (data.bannerFile && data.bannerFile.length > 0) {
         const file = data.bannerFile[0];
-        if (file.size > 5 * 1024 * 1024) {
+        if (file.size > 5 * 1024 * 1024) { // Re-check size on submit
           toast({ title: "Banner muito grande", description: "O arquivo do banner excede 5MB.", variant: "destructive"});
           setLoading(false); return;
         }
         const storageRef = ref(storage, `empresas/${user.uid}/banner/${Date.now()}_${file.name}`);
         const snapshot = await uploadBytes(storageRef, file);
         bannerUrlToSave = await getDownloadURL(snapshot.ref);
-         if (companyData?.bannerUrl && companyData.bannerUrl !== bannerUrlToSave) { // Delete old banner if new one is uploaded
+         // Delete old banner if a new one is uploaded and there was an old one
+         if (companyData?.bannerUrl && companyData.bannerUrl !== bannerUrlToSave) {
             try { await deleteObject(ref(storage, companyData.bannerUrl)); } catch (e) { console.warn("Could not delete old banner", e); }
         }
       }
 
       const { logotipoFile, bannerFile, ...companyDetails } = data;
       const finalData: Partial<Empresa> = {
-        owner: user.uid,
+        owner: user.uid, // Ensure owner is always set
         nome: companyDetails.nome || "",
         cnpj: companyDetails.cnpj || "",
         email: companyDetails.email || "",
@@ -235,16 +245,19 @@ export default function CompanyProfilePage() {
       };
 
       const companyRef = doc(db, "empresas", user.uid);
-      const docSnap = await getDoc(companyRef);
+      const docSnap = await getDoc(companyRef); // Check existence before deciding set or update
       if (docSnap.exists()) {
         await updateDoc(companyRef, finalData);
       } else {
-        await setDoc(companyRef, finalData);
+        await setDoc(companyRef, finalData); // Use setDoc if document doesn't exist
       }
 
-      setCompanyData(prev => ({...(prev || {}), ...finalData, id: user.uid } as Empresa));
+      // Update local state to reflect saved data
+      setCompanyData(prev => ({...(prev || {} as Empresa), ...finalData, id: user.uid } as Empresa));
+      // Clear file inputs and previews
       setNewLogoPreview(null); setValue("logotipoFile", undefined);
       setNewBannerPreview(null); setValue("bannerFile", undefined);
+
       toast({ title: "Perfil da empresa salvo!", description: "Suas informações foram atualizadas." });
     } catch (error) {
       console.error("Error saving company profile:", error);
@@ -278,8 +291,18 @@ export default function CompanyProfilePage() {
         description="Gerencie as informações e a identidade visual da sua empresa."
       />
       <Card>
+        {/* Banner Display Area */}
         <div className="relative h-48 md:h-64 bg-muted/50 w-full group">
-          {companyData?.bannerUrl ? (
+          {newBannerPreview ? (
+             <NextImage
+              src={newBannerPreview}
+              alt="Pré-visualização do Novo Banner"
+              layout="fill"
+              objectFit="cover"
+              className="rounded-t-lg"
+              data-ai-hint="company banner preview"
+            />
+          ) : companyData?.bannerUrl ? (
             <NextImage
               src={companyData.bannerUrl}
               alt="Banner da Empresa"
@@ -295,12 +318,15 @@ export default function CompanyProfilePage() {
               <p className="text-xs">(Recomendado: 1200x300px ou similar)</p>
             </div>
           )}
-           <div className="absolute inset-0 bg-black/30 rounded-t-lg"></div>
+           <div className="absolute inset-0 bg-black/30 rounded-t-lg group-hover:bg-black/10 transition-colors"></div>
         </div>
 
+        {/* Logo and Company Name Display */}
         <div className="relative px-6 pb-6 -mt-16 flex flex-col items-center text-center">
           <div className="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-background bg-muted flex items-center justify-center overflow-hidden shadow-lg mb-2">
-            {companyData?.logotipo ? (
+            {newLogoPreview ? (
+                <NextImage src={newLogoPreview} alt="Preview do novo logotipo" width={144} height={144} className="object-contain" data-ai-hint="company logo preview" />
+            ): companyData?.logotipo ? (
               <NextImage
                 src={companyData.logotipo}
                 alt="Logotipo da Empresa"
@@ -395,14 +421,7 @@ export default function CompanyProfilePage() {
                             )}
                         />
                         <p className="text-xs text-muted-foreground mt-1">Recomendamos um logotipo quadrado (1:1). Máx: 2MB.</p>
-                        {newLogoPreview && (
-                            <div className="mt-4">
-                            <p className="text-sm font-medium mb-2">Pré-visualização do novo logotipo:</p>
-                            <div className="w-24 h-24 rounded border bg-muted/50 flex items-center justify-center overflow-hidden">
-                                <NextImage src={newLogoPreview} alt="Preview do novo logotipo" width={96} height={96} className="object-contain max-w-full max-h-full" data-ai-hint="company logo preview" />
-                            </div>
-                            </div>
-                        )}
+                        {/* Preview for NEW logo is already handled by newLogoPreview state */}
                     </div>
                      <div>
                         <Label htmlFor="bannerFile">Alterar/Adicionar Banner</Label>
@@ -421,14 +440,7 @@ export default function CompanyProfilePage() {
                             )}
                         />
                         <p className="text-xs text-muted-foreground mt-1">Recomendado: Imagem horizontal (ex: 1200x300px). Máx: 5MB.</p>
-                        {newBannerPreview && (
-                            <div className="mt-4">
-                            <p className="text-sm font-medium mb-2">Pré-visualização do novo banner:</p>
-                            <div className="w-full max-w-md h-24 rounded border bg-muted/50 flex items-center justify-center overflow-hidden">
-                                <NextImage src={newBannerPreview} alt="Preview do novo banner" layout="fill" objectFit="contain" className="max-w-full max-h-full" data-ai-hint="company banner preview" />
-                            </div>
-                            </div>
-                        )}
+                         {/* Preview for NEW banner is already handled by newBannerPreview state */}
                     </div>
                 </div>
             </Card>
