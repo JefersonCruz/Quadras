@@ -61,14 +61,14 @@ export default function AdminUsersPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center"><UserCog className="mr-2 text-primary"/> Lista de Usuários</CardTitle>
-           <div className="mt-2">
+           <div className="mt-2 relative">
             <Input
               placeholder="Buscar usuário por nome ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-              icon={<Search className="h-4 w-4 text-muted-foreground" />}
+              className="max-w-sm pl-10" // Add padding for the icon
             />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
         </CardHeader>
         <CardContent>
