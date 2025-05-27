@@ -1,7 +1,9 @@
 
+"use client"; // Added "use client" as useToast can only be used in client components
+
 import PageHeader from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, FileText, Tag, Edit, Trash2 } from "lucide-react";
+import { Settings, FileText, Tag, Edit, Trash2, PlusCircle } from "lucide-react"; // Added PlusCircle
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -11,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast"; // Added useToast
 
 // Mock data for label templates
 const mockLabelTemplates = [
@@ -22,6 +25,15 @@ const mockLabelTemplates = [
 ];
 
 export default function AdminTemplatesPage() {
+  const { toast } = useToast(); // Initialized toast
+
+  const handleAddNewLabelTemplate = () => {
+    toast({
+      title: "Em Desenvolvimento",
+      description: "A funcionalidade para adicionar novos templates de etiqueta está em desenvolvimento.",
+    });
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -37,7 +49,7 @@ export default function AdminTemplatesPage() {
             <p className="text-muted-foreground mb-4">
               Gerencie os modelos de etiquetas padrão disponíveis para todos os usuários da plataforma.
             </p>
-            <Button disabled className="mb-4">
+            <Button onClick={handleAddNewLabelTemplate} className="mb-4"> {/* Removed disabled, added onClick */}
               <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Template de Etiqueta
             </Button>
             
@@ -85,7 +97,7 @@ export default function AdminTemplatesPage() {
             <p className="text-muted-foreground mb-4">
               Gerencie os modelos de fichas técnicas padrão disponíveis para todos os usuários.
             </p>
-            <Button disabled className="mb-4">
+            <Button disabled className="mb-4"> {/* This one remains disabled for now */}
                 <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Template de Ficha
             </Button>
              {/* Placeholder for list of sheet templates */}
@@ -98,6 +110,3 @@ export default function AdminTemplatesPage() {
     </div>
   );
 }
-
-// Make sure to import PlusCircle if it's not auto-imported
-import { PlusCircle } from "lucide-react";
