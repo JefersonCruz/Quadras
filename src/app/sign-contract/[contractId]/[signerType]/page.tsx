@@ -39,6 +39,8 @@ export default function SignContractPage() {
   const [signerContext, setSignerContext] = useState<SignerContextDetails | null>(null);
 
   const fetchContract = useCallback(async () => {
+    console.log(`[SignContractPage] Fetching contract. ID: ${contractId}, SignerType: ${signerTypeParam}`);
+
     if (!contractId) {
       setError("ID do contrato não fornecido na URL.");
       setLoading(false);
@@ -53,13 +55,14 @@ export default function SignContractPage() {
 
     setLoading(true);
     setError(null);
-    setSignerContext(null); // Reset signer context on new fetch
+    setSignerContext(null);
     try {
       const contractRef = doc(db, "contratos", contractId);
       const docSnap = await getDoc(contractRef);
 
       if (docSnap.exists()) {
         const contractData = { id: docSnap.id, ...docSnap.data() } as Contrato;
+        console.log("[SignContractPage] Contract data fetched:", JSON.stringify(contractData, null, 2));
         setContract(contractData);
 
         let currentSignerKey: SignerKeyInFirestore | undefined;
@@ -82,6 +85,7 @@ export default function SignContractPage() {
               roleDesc = `Testemunha 1 (${name || 'Não especificado'})`;
             } else {
               setError("Detalhes da Testemunha 1 não encontrados ou não aplicáveis neste contrato.");
+              console.warn("[SignContractPage] Witness 1 details not found for contract:", contractId);
               setLoading(false);
               return;
             }
@@ -94,6 +98,7 @@ export default function SignContractPage() {
               roleDesc = `Testemunha 2 (${name || 'Não especificado'})`;
             } else {
               setError("Detalhes da Testemunha 2 não encontrados ou não aplicáveis neste contrato.");
+              console.warn("[SignContractPage] Witness 2 details not found for contract:", contractId);
               setLoading(false);
               return;
             }
@@ -101,27 +106,32 @@ export default function SignContractPage() {
           case 'provider':
             currentSignerKey = 'prestador';
             name = contractData.empresaPrestador?.responsavelTecnico || contractData.empresaPrestador?.nome || "Prestador de Serviço";
-            email = contractData.empresaPrestador?.email; // Assuming provider might have an email
+            email = contractData.empresaPrestador?.email; 
             roleDesc = `Prestador (${name})`;
             break;
           default:
             setError("Tipo de assinante desconhecido.");
+            console.error("[SignContractPage] Unknown signer type:", signerTypeParam);
             setLoading(false);
             return;
         }
 
         if (!name || !currentSignerKey) {
           setError(`Detalhes para o papel '${signerTypeParam}' não puderam ser determinados para este contrato.`);
+          console.error(`[SignContractPage] Could not determine name or key for signer type '${signerTypeParam}'`);
           setLoading(false);
           return;
         }
-        setSignerContext({ keyInFirestore: currentSignerKey, name: name, email, roleDescription: roleDesc });
+        const determinedSignerContext = { keyInFirestore: currentSignerKey, name: name, email, roleDescription: roleDesc };
+        console.log("[SignContractPage] Determined signerContext:", JSON.stringify(determinedSignerContext, null, 2));
+        setSignerContext(determinedSignerContext);
 
       } else {
         setError("Contrato não encontrado. Verifique o link ou se você tem permissão para acessá-lo.");
+        console.log("[SignContractPage] Contract not found for ID:", contractId);
       }
     } catch (err: any) {
-      console.error("Erro ao buscar contrato:", err);
+      console.error("[SignContractPage] Error fetching contract:", err);
       setError(err.message || "Ocorreu um erro ao buscar os detalhes do contrato.");
     } finally {
       setLoading(false);
@@ -132,11 +142,18 @@ export default function SignContractPage() {
     fetchContract();
   }, [fetchContract]);
 
-  const isAlreadySignedByCurrentParty = () => {
+  const isAlreadySignedByCurrentParty = useCallback(() => {
     if (!contract || !signerContext || !contract.assinaturas || !signerContext.keyInFirestore) return false;
     return !!contract.assinaturas[signerContext.keyInFirestore]?.dataHora;
-  };
+  }, [contract, signerContext]);
   
+  useEffect(() => {
+    if (contract && signerContext) {
+      console.log("[SignContractPage] Contract and SignerContext are set. Checking signed status.");
+      console.log("[SignContractPage] Is already signed by current party?", isAlreadySignedByCurrentParty());
+    }
+  }, [contract, signerContext, isAlreadySignedByCurrentParty]);
+
   const currentPartySignatureTime = () => {
     if (!contract || !signerContext || !contract.assinaturas || !signerContext.keyInFirestore) return null;
     const signature = contract.assinaturas[signerContext.keyInFirestore];
@@ -169,7 +186,7 @@ export default function SignContractPage() {
 
       const signatureData: AssinaturaDetalhes = {
         nome: signerContext.name,
-        email: signerContext.email,
+        email: signerContext.email, // Include email if available
         dataHora: Timestamp.now(),
         // IP, canalAcesso, userAgent poderiam ser adicionados aqui se coletados
       };
@@ -181,6 +198,8 @@ export default function SignContractPage() {
             return;
         }
         signatureData.nome = contract.empresaPrestador.responsavelTecnico;
+        // Provider's email for signature record might be different from company email.
+        // For now, we use the signerContext.email which is contract.empresaPrestador.email
       }
 
 
@@ -206,16 +225,20 @@ export default function SignContractPage() {
       } else if (Object.values(updatedSignatures).some(sig => sig?.dataHora)) {
         newStatus = 'parcialmente_assinado';
       }
-      // Se o status era 'rascunho', e agora tem pelo menos uma assinatura, muda para 'pendente_assinaturas'
-      // ou 'parcialmente_assinado' se for mais apropriado.
-      // A lógica do status já lida com 'pendente_assinaturas' -> 'parcialmente_assinado'
-      if (contract.status === 'rascunho' && newStatus !== 'assinado') {
-        newStatus = Object.values(updatedSignatures).some(sig => sig?.dataHora) ? 'parcialmente_assinado' : 'pendente_assinaturas';
+      
+      if (contract.status === 'rascunho' && newStatus !== 'assinado' && newStatus !== 'parcialmente_assinado' ) {
+         if (Object.values(updatedSignatures).some(sig => sig?.dataHora)) {
+            newStatus = 'parcialmente_assinado';
+         } else {
+            // If still no signatures, but was rascunho, it should probably go to pendente
+            // However, this flow is on the signing page, so it must have been at least pendente
+            // If it was rascunho and someone signed, it becomes parcialmente_assinado.
+         }
       }
 
 
-      const updatePayload: any = { // Usando any para flexibilidade, garanta que as chaves correspondam à estrutura do Firestore
-        [`assinaturas.${currentSignerKey}`]: signatureData,
+      const updatePayload: any = { 
+        assinaturas: updatedSignatures, // Send the whole signatures object
         status: newStatus,
         dataUltimaModificacao: Timestamp.now(),
       };
@@ -224,6 +247,7 @@ export default function SignContractPage() {
         updatePayload.dataFinalizacaoAssinaturas = Timestamp.now();
       }
 
+      console.log("[SignContractPage] Attempting to update contract with payload:", JSON.stringify(updatePayload, null, 2));
       await updateDoc(contractRef, updatePayload);
 
       setContract(prev => prev ? ({
@@ -237,7 +261,7 @@ export default function SignContractPage() {
       toast({ title: "Contrato Assinado!", description: `Obrigado, ${signatureData.nome}. Sua assinatura foi registrada.` });
 
     } catch (error: any) {
-      console.error("Erro ao assinar contrato:", error);
+      console.error("[SignContractPage] Error signing contract:", error);
       let description = "Não foi possível registrar sua assinatura.";
       if (error.code === 'permission-denied') {
         description = "Você não tem permissão para assinar este contrato ou a operação foi bloqueada pelas regras de segurança. Verifique se está logado com o e-mail correto ou se o contrato permite sua assinatura.";
