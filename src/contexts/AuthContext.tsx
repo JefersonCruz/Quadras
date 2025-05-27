@@ -14,7 +14,7 @@ interface AuthContextType {
   user: FirebaseUser | null;
   userData: Usuario | null;
   isAdmin: boolean;
-  loading: boolean;
+  loading: boolean; // This will represent whether auth is still being resolved
   db: Firestore;
 }
 
@@ -24,28 +24,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<Usuario | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true); // Start as true
+  const [authResolved, setAuthResolved] = useState(false); // Initially false
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let didUnsubscribe = false; // Flag to prevent state updates after unmount
+    let didUnsubscribe = false;
 
-    // Fallback timeout to ensure loading doesn't get stuck
     const loadingTimeout = setTimeout(() => {
-      if (!didUnsubscribe && loading) {
-        console.warn("AuthContext: Loading timeout reached (15s). Forcing loading to false due to persistent auth state resolution delay (possibly network issues).");
+      if (!didUnsubscribe && !authResolved) { // Only force if not already resolved
+        console.warn(
+          "AuthContext: Loading timeout reached (15s). Forcing auth to resolved state."
+        );
         if (!didUnsubscribe) { // Check again before setting state
-            setLoading(false);
-            setUser(null);
-            setUserData(null);
-            setIsAdmin(false);
+          setUser(null); // Default to no user if timeout
+          setUserData(null);
+          setIsAdmin(false);
+          setAuthResolved(true);
         }
       }
-    }, 15000); // 15 seconds timeout
+    }, 15000);
+
+    let unsubscribe: (() => void) | undefined;
 
     try {
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (didUnsubscribe) return; // Prevent updates if component unmounted
+        if (didUnsubscribe) return;
 
         try {
           if (firebaseUser) {
@@ -59,9 +61,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               setIsAdmin(appUserData.role === "admin");
             } else {
               console.warn(
-                `AuthContext: Documento do usuário ${firebaseUser.uid} não encontrado.`
+                `AuthContext: User document ${firebaseUser.uid} not found.`
               );
-              setUserData(null);
+              setUserData(null); // Ensure userData is reset if doc not found
               setIsAdmin(false);
             }
           } else {
@@ -71,9 +73,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } catch (error) {
           const err = error as { code?: string; message?: string };
-          console.warn("AuthContext: Erro ao buscar dados do usuário:", err);
+          console.warn("AuthContext: Error fetching user data:", err);
           if (err.code === "auth/network-request-failed") {
-            console.warn("⚠️ Firebase Auth: Network request failed. Check internet connection and Firebase service status.");
+            console.warn(
+              "⚠️ Firebase Auth: Network request failed. Check internet connection and Firebase service status."
+            );
           }
           // Reset user state on error during user data fetch
           if (!didUnsubscribe) {
@@ -83,19 +87,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } finally {
           if (!didUnsubscribe) {
-            setLoading(false);
-            clearTimeout(loadingTimeout); // Clear timeout if successfully loaded/processed
+            setAuthResolved(true); // Mark authentication as resolved
+            clearTimeout(loadingTimeout);
           }
         }
       });
     } catch (setupError) {
-      console.error("AuthContext: Erro ao configurar listener de autenticação:", setupError);
+      console.error(
+        "AuthContext: Error setting up auth listener:",
+        setupError
+      );
       if (!didUnsubscribe) {
         setUser(null);
         setUserData(null);
         setIsAdmin(false);
-        setLoading(false);
-        clearTimeout(loadingTimeout); // Clear timeout on setup error
+        setAuthResolved(true); // Resolve auth even on setup error to prevent freeze
+        clearTimeout(loadingTimeout);
       }
     }
 
@@ -104,11 +111,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (unsubscribe) {
         unsubscribe();
       }
-      clearTimeout(loadingTimeout); // Clear timeout on unmount
+      clearTimeout(loadingTimeout);
     };
   }, []); // Empty dependency array: run only on mount and unmount
 
-  if (loading) {
+  if (!authResolved) {
+    // This UI is rendered on the server and on the initial client render,
+    // before the useEffect hook runs and auth state is resolved.
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 bg-background text-muted-foreground">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -117,8 +126,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
 
+  // Once authResolved is true (only on the client, after useEffect),
+  // we provide the actual context and render the children.
   return (
-    <AuthContext.Provider value={{ user, userData, isAdmin, loading, db }}>
+    <AuthContext.Provider value={{ user, userData, isAdmin, loading: !authResolved, db }}>
       {children}
     </AuthContext.Provider>
   );
