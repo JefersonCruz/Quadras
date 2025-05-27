@@ -37,6 +37,7 @@ export default function AdminUsersPage() {
       const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Usuario));
       setUsers(usersData);
     } catch (error) {
+      console.error("Error fetching users:", error);
       toast({ title: "Erro ao buscar usuários", description: "Não foi possível carregar a lista de usuários.", variant: "destructive" });
     } finally {
       setLoading(false);
