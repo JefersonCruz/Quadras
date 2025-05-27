@@ -37,7 +37,7 @@ const contractSchema = z.object({
   prazoDeExecucao: z.string().min(3, "Prazo de execução é obrigatório."),
   condicoesDePagamento: z.string().min(10, "Condições de pagamento são obrigatórias."),
   fornecimentoDeMateriais: z.string().min(5, "Informação sobre fornecimento de materiais é obrigatória."),
-  multasPenalidades: z.string().min(5, "Informação sobre multas/penalidades é obrigatória."),
+  multasPenalidades: z.string().min(5, "Informação sobre multas/penalidades/responsabilidades/garantia é obrigatória."),
   cancelamento: z.string().min(5, "Informação sobre cancelamento é obrigatória."),
   foro: z.string().optional(),
 
@@ -68,13 +68,13 @@ export default function NewContractPage() {
       testemunha1Email: "",
       testemunha2Nome: "",
       testemunha2Email: "",
-      objetoDoContrato: "Prestação de serviços de instalação e manutenção elétrica, incluindo, mas não se limitando a: [Descrever os serviços].",
-      prazoDeExecucao: "O serviço será executado em [Número] dias úteis a contar da data de assinatura deste contrato, ou conforme cronograma a ser acordado entre as partes.",
-      condicoesDePagamento: "O pagamento será realizado da seguinte forma: 50% (cinquenta por cento) do valor total no ato da assinatura deste contrato, a título de sinal, e os 50% (cinquenta por cento) restantes após a conclusão e aprovação dos serviços. Formas de pagamento aceitas: [Pix, Transferência Bancária, etc.].",
-      fornecimentoDeMateriais: "Os materiais necessários para a execução dos serviços serão fornecidos pelo CONTRATADO, e seus custos serão discriminados e repassados ao CONTRATANTE, mediante apresentação de notas fiscais, ou [outra condição].",
-      multasPenalidades: "Em caso de descumprimento de quaisquer cláusulas deste contrato por qualquer das partes, incidirá multa de 10% (dez por cento) sobre o valor total do contrato, sem prejuízo de eventuais perdas e danos.",
-      cancelamento: "Qualquer das partes poderá rescindir o presente contrato mediante aviso prévio de 30 (trinta) dias. Em caso de rescisão imotivada pelo CONTRATANTE, este arcará com os custos dos serviços já executados e materiais adquiridos até a data da rescisão, acrescido de multa rescisória de [Percentual]% sobre o valor remanescente do contrato.",
-      foro: "Fica eleito o foro da comarca de [Cidade da Empresa Prestadora]/[UF] para dirimir quaisquer controvérsias oriundas do presente contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.",
+      objetoDoContrato: "CLÁUSULA 1 – OBJETO\nO presente contrato tem como objeto a prestação de serviços técnicos de [DESCREVER SERVIÇO: instalação elétrica, reparos, manutenção, projeto, etc.], a serem realizados no endereço: [LOCAL DE EXECUÇÃO].",
+      prazoDeExecucao: "CLÁUSULA 2 – PRAZO\nA execução dos serviços terá início em [DATA INICIAL] e prazo estimado de [X DIAS/SEMANAS], podendo ser prorrogado por acordo entre as partes.",
+      condicoesDePagamento: "CLÁUSULA 3 – VALOR E CONDIÇÕES DE PAGAMENTO\nO valor total dos serviços é de R$ [XXXX,XX] (por extenso), a ser pago da seguinte forma:\n[ ] À vista\n[ ] Parcelado em [X] vezes de R$ [XX,XX]\n[ ] Entrada de R$ [XX,XX] e o restante ao término\nO pagamento será efetuado mediante [PIX | dinheiro | transferência bancária].",
+      fornecimentoDeMateriais: "CLÁUSULA 4 – RESPONSABILIDADES DO CONTRATADO (Materiais)\n- Utilizar materiais de qualidade (caso o CONTRATADO forneça).\n- Os materiais necessários para a execução dos serviços serão fornecidos pelo [CONTRATADO/CONTRATANTE], e seus custos serão [detalhados em anexo/incluídos no valor total], mediante apresentação de notas fiscais, ou [outra condição].",
+      multasPenalidades: "CLÁUSULA 4 – RESPONSABILIDADES DO CONTRATADO\nO CONTRATADO se obriga a:\n- Executar os serviços com zelo, segurança e qualidade técnica.\n- Seguir as normas técnicas (ex: NBR 5410 para instalações elétricas).\n- Assumir responsabilidades por danos causados por imperícia ou negligência.\n- Emitir recibo ou nota fiscal (se for empresa).\n\nCLÁUSULA 5 – RESPONSABILIDADES DO CONTRATANTE\nO CONTRATANTE se compromete a:\n- Disponibilizar acesso ao local dos serviços.\n- Fornecer energia, água e condições adequadas de trabalho (se necessário).\n- Efetuar os pagamentos nas condições acordadas.\n\nCLÁUSULA 6 – GARANTIA (SE APLICÁVEL)\nO CONTRATADO garante os serviços prestados por [90 dias] a contar da entrega/conclusão, conforme art. 26 do Código de Defesa do Consumidor.\nCaso haja falha comprovada de execução, o serviço será refeito sem custos adicionais.",
+      cancelamento: "CLÁUSULA 7 – RESCISÃO\nO presente contrato poderá ser rescindido por qualquer das partes, mediante notificação prévia de [5] dias úteis.\nSe houver serviços já executados, o CONTRATADO terá direito ao valor proporcional.",
+      foro: "CLÁUSULA 8 – FORO\nPara dirimir quaisquer dúvidas oriundas deste contrato, as partes elegem o foro da comarca de [CIDADE/UF].",
       empresaNomeDisplay: "",
       empresaCnpjDisplay: "",
       empresaEnderecoDisplay: "",
@@ -140,15 +140,15 @@ export default function NewContractPage() {
       blocosEditaveisPayload.foro = data.foro.trim();
     }
     
-    const empresaPrestadorPayload: EmpresaPrestadorContrato = {
+    const empresaPrestadorPayload: Partial<EmpresaPrestadorContrato> = { // Use Partial as not all fields are guaranteed initially
         nome: empresaUsuario?.nome || data.empresaNomeDisplay || "Empresa não informada",
     };
     const formEmpresaCnpj = empresaUsuario?.cnpj || data.empresaCnpjDisplay;
-    if (formEmpresaCnpj && formEmpresaCnpj.trim() !== "") {
+    if (formEmpresaCnpj && formEmpresaCnpj.trim() !== "" && formEmpresaCnpj !== "Não configurado") {
         empresaPrestadorPayload.cnpj = formEmpresaCnpj.trim();
     }
     const formEmpresaEndereco = empresaUsuario?.endereco || data.empresaEnderecoDisplay;
-    if (formEmpresaEndereco && formEmpresaEndereco.trim() !== "") {
+    if (formEmpresaEndereco && formEmpresaEndereco.trim() !== "" && formEmpresaEndereco !== "Não configurado") {
         empresaPrestadorPayload.endereco = formEmpresaEndereco.trim();
     }
     const formEmpresaResponsavel = data.empresaResponsavel || userData?.nome;
@@ -163,10 +163,10 @@ export default function NewContractPage() {
       cliente: clientePayload,
       blocosEditaveis: blocosEditaveisPayload,
       status: 'rascunho', 
-      assinaturas: {}, // Initialize as an empty object
+      assinaturas: {}, 
       dataCriacao: Timestamp.now(),
       dataUltimaModificacao: Timestamp.now(),
-      empresaPrestador: empresaPrestadorPayload,
+      empresaPrestador: empresaPrestadorPayload as EmpresaPrestadorContrato, // Cast as some fields might be omitted if not set
     };
 
     if (testemunhasArray.length > 0) {
@@ -195,7 +195,7 @@ export default function NewContractPage() {
     <div className="space-y-6">
       <PageHeader
         title="Novo Contrato Digital"
-        description="Preencha os dados para criar um novo contrato de prestação de serviço."
+        description="Pelo presente instrumento particular, preencha os dados para criar um novo contrato de prestação de serviço."
       />
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -203,24 +203,24 @@ export default function NewContractPage() {
             
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center"><Building className="mr-2 h-5 w-5 text-primary"/> Dados da Sua Empresa (Prestador)</CardTitle>
+                <CardTitle className="flex items-center"><Building className="mr-2 h-5 w-5 text-primary"/> Dados da Sua Empresa (CONTRATADO)</CardTitle>
                 <CardDescription>Estes dados são do seu perfil de empresa ou preenchidos com base no seu usuário. Serão incluídos no contrato.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <Label>Nome da Empresa</Label>
+                  <Label>Nome da Empresa / Profissional</Label>
                   <Controller name="empresaNomeDisplay" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                 <div>
-                  <Label>CNPJ</Label>
+                  <Label>CNPJ/CPF</Label>
                   <Controller name="empresaCnpjDisplay" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                 <div>
-                  <Label>Endereço da Empresa</Label>
+                  <Label>Endereço Completo</Label>
                   <Controller name="empresaEnderecoDisplay" control={control} render={({ field }) => <Input {...field} disabled />} />
                 </div>
                  <div>
-                  <Label htmlFor="empresaResponsavel">Responsável Técnico (Sua Empresa)</Label>
+                  <Label htmlFor="empresaResponsavel">Representado por / Responsável Técnico</Label>
                    <Controller
                     name="empresaResponsavel"
                     control={control}
@@ -233,12 +233,12 @@ export default function NewContractPage() {
             
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center"><User className="mr-2 h-5 w-5 text-primary"/> Dados do Cliente</CardTitle>
+                <CardTitle className="flex items-center"><User className="mr-2 h-5 w-5 text-primary"/> Dados do Cliente (CONTRATANTE)</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="clienteNome">Nome Completo do Cliente</Label>
-                  <Controller name="clienteNome" control={control} render={({ field }) => <Input id="clienteNome" {...field} />} />
+                  <Controller name="clienteNome" control={control} render={({ field }) => <Input id="clienteNome" {...field} placeholder="[NOME DO CONTRATANTE]" />} />
                   {errors.clienteNome && <p className="text-sm text-destructive mt-1">{errors.clienteNome.message}</p>}
                 </div>
                 <div>
@@ -246,10 +246,14 @@ export default function NewContractPage() {
                   <Controller name="clienteEmail" control={control} render={({ field }) => <Input id="clienteEmail" type="email" {...field} />} />
                   {errors.clienteEmail && <p className="text-sm text-destructive mt-1">{errors.clienteEmail.message}</p>}
                 </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="clienteCpfCnpj">CPF/CNPJ do Cliente (opcional)</Label>
-                  <Controller name="clienteCpfCnpj" control={control} render={({ field }) => <Input id="clienteCpfCnpj" {...field} />} />
+                <div className="md:col-span-1">
+                  <Label htmlFor="clienteCpfCnpj">CPF/CNPJ do Cliente</Label>
+                  <Controller name="clienteCpfCnpj" control={control} render={({ field }) => <Input id="clienteCpfCnpj" {...field} placeholder="[CPF/CNPJ DO CONTRATANTE]" />} />
                   {errors.clienteCpfCnpj && <p className="text-sm text-destructive mt-1">{errors.clienteCpfCnpj.message}</p>}
+                </div>
+                <div className="md:col-span-1">
+                  <Label>Endereço do Cliente</Label>
+                  <Input disabled placeholder="Será obtido do cadastro do cliente" />
                 </div>
               </CardContent>
             </Card>
@@ -294,40 +298,43 @@ export default function NewContractPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="objetoDoContrato">Objeto do Contrato</Label>
-                  <Controller name="objetoDoContrato" control={control} render={({ field }) => <Textarea id="objetoDoContrato" {...field} rows={3} />} />
+                  <Label htmlFor="objetoDoContrato">CLÁUSULA 1 – OBJETO</Label>
+                  <Controller name="objetoDoContrato" control={control} render={({ field }) => <Textarea id="objetoDoContrato" {...field} rows={4} />} />
                   {errors.objetoDoContrato && <p className="text-sm text-destructive mt-1">{errors.objetoDoContrato.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="prazoDeExecucao">Prazo de Execução</Label>
-                  <Controller name="prazoDeExecucao" control={control} render={({ field }) => <Textarea id="prazoDeExecucao" {...field} rows={2} />} />
+                  <Label htmlFor="prazoDeExecucao">CLÁUSULA 2 – PRAZO</Label>
+                  <Controller name="prazoDeExecucao" control={control} render={({ field }) => <Textarea id="prazoDeExecucao" {...field} rows={3} />} />
                   {errors.prazoDeExecucao && <p className="text-sm text-destructive mt-1">{errors.prazoDeExecucao.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="condicoesDePagamento">Condições de Pagamento</Label>
-                  <Controller name="condicoesDePagamento" control={control} render={({ field }) => <Textarea id="condicoesDePagamento" {...field} rows={3} />} />
+                  <Label htmlFor="condicoesDePagamento">CLÁUSULA 3 – VALOR E CONDIÇÕES DE PAGAMENTO</Label>
+                  <Controller name="condicoesDePagamento" control={control} render={({ field }) => <Textarea id="condicoesDePagamento" {...field} rows={5} />} />
                   {errors.condicoesDePagamento && <p className="text-sm text-destructive mt-1">{errors.condicoesDePagamento.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="fornecimentoDeMateriais">Fornecimento de Materiais</Label>
-                  <Controller name="fornecimentoDeMateriais" control={control} render={({ field }) => <Textarea id="fornecimentoDeMateriais" {...field} rows={3} />} />
+                  <Label htmlFor="fornecimentoDeMateriais">CLÁUSULA 4 (EXTRATO) – FORNECIMENTO DE MATERIAIS</Label>
+                  <Controller name="fornecimentoDeMateriais" control={control} render={({ field }) => <Textarea id="fornecimentoDeMateriais" {...field} rows={4} />} />
                   {errors.fornecimentoDeMateriais && <p className="text-sm text-destructive mt-1">{errors.fornecimentoDeMateriais.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="multasPenalidades">Multas e Penalidades</Label>
-                  <Controller name="multasPenalidades" control={control} render={({ field }) => <Textarea id="multasPenalidades" {...field} rows={3} />} />
+                  <Label htmlFor="multasPenalidades">CLÁUSULAS 4, 5, 6 – RESPONSABILIDADES E GARANTIA</Label>
+                  <Controller name="multasPenalidades" control={control} render={({ field }) => <Textarea id="multasPenalidades" {...field} rows={8} />} />
                   {errors.multasPenalidades && <p className="text-sm text-destructive mt-1">{errors.multasPenalidades.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="cancelamento">Cancelamento e Rescisão</Label>
-                  <Controller name="cancelamento" control={control} render={({ field }) => <Textarea id="cancelamento" {...field} rows={3} />} />
+                  <Label htmlFor="cancelamento">CLÁUSULA 7 – RESCISÃO</Label>
+                  <Controller name="cancelamento" control={control} render={({ field }) => <Textarea id="cancelamento" {...field} rows={4} />} />
                   {errors.cancelamento && <p className="text-sm text-destructive mt-1">{errors.cancelamento.message}</p>}
                 </div>
                  <div>
-                  <Label htmlFor="foro">Foro (opcional)</Label>
-                  <Controller name="foro" control={control} render={({ field }) => <Input id="foro" {...field} placeholder="Ex: Comarca de [Sua Cidade]/[UF]" />} />
+                  <Label htmlFor="foro">CLÁUSULA 8 – FORO</Label>
+                  <Controller name="foro" control={control} render={({ field }) => <Input id="foro" {...field} placeholder="Ex: Comarca de [CIDADE/UF]" />} />
                   {errors.foro && <p className="text-sm text-destructive mt-1">{errors.foro.message}</p>}
                 </div>
+                 <p className="text-xs text-muted-foreground mt-2">
+                   E por estarem assim justos e contratados, assinam o presente em duas vias de igual teor. [Local de assinatura], [Data da assinatura].
+                 </p>
               </CardContent>
             </Card>
           </div>
@@ -368,9 +375,9 @@ export default function NewContractPage() {
                 <CardHeader><CardTitle>Próximos Passos</CardTitle></CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
                     <p>1. Salve o rascunho deste contrato.</p>
-                    <p>2. Visualize o contrato gerado (em breve).</p>
-                    <p>3. Envie para assinatura do cliente e testemunhas (em breve).</p>
-                    <p>4. Acompanhe o status das assinaturas (em breve).</p>
+                    <p>2. Visualize o contrato gerado na lista de contratos.</p>
+                    <p>3. Compartilhe o link para assinatura do cliente e testemunhas.</p>
+                    <p>4. Acompanhe o status das assinaturas.</p>
                 </CardContent>
             </Card>
           </div>
@@ -380,3 +387,4 @@ export default function NewContractPage() {
   );
 }
 
+    
