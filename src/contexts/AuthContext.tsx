@@ -40,15 +40,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userDocSnap.exists()) {
             const appUserData = userDocSnap.data() as Usuario;
             setUserData(appUserData);
-            // Check for admin role based on Firestore document first for simplicity
-            // For more security, custom claims via Firebase Functions are recommended for admin roles
             setIsAdmin(appUserData.role === 'admin');
           } else {
-            // This case might happen if user is authenticated with Firebase Auth
-            // but their Firestore document wasn't created or was deleted.
-            console.warn(`No Firestore document found for user ${firebaseUser.uid}`);
-            setUserData(null);
-            setIsAdmin(false);
+            console.warn(`No Firestore document found for user ${firebaseUser.uid}. User will be treated as non-admin with no specific app data.`);
+            setUserData(null); // Explicitly set to null
+            setIsAdmin(false);   // Explicitly set to false
           }
         } else {
           setUser(null);
