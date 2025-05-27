@@ -57,9 +57,22 @@ export default function ContractsPage() {
 
   const APP_BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:9003';
 
+  useEffect(() => {
+    console.log('[ContractsPage] Loading state changed:', loading);
+  }, [loading]);
+
+  useEffect(() => {
+    console.log('[ContractsPage] Contracts state updated:', contracts);
+  }, [contracts]);
+
 
   const fetchContracts = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('[ContractsPage] fetchContracts: No user, returning.');
+      setLoading(false); // Ensure loading is set to false if no user
+      return;
+    }
+    console.log('[ContractsPage] fetchContracts: Starting for user UID:', user.uid);
     setLoading(true);
     try {
       const q = query(
@@ -67,12 +80,18 @@ export default function ContractsPage() {
         where("createdBy", "==", user.uid),
         orderBy("dataCriacao", "desc")
       );
+      console.log('[ContractsPage] fetchContracts: Query constructed.');
       const querySnapshot = await getDocs(q);
+      console.log('[ContractsPage] fetchContracts: Query snapshot received, size:', querySnapshot.size);
+      
       const contractsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contrato));
+      console.log('[ContractsPage] fetchContracts: Mapped contractsData:', JSON.stringify(contractsData, null, 2));
+      
       setContracts(contractsData);
     } catch (error: any) {
-      console.error("Erro ao buscar contratos:", error);
+      console.error("[ContractsPage] fetchContracts: Full error object:", error);
       if (error.code === 'failed-precondition' && error.message.includes('index')) {
+          console.error("[ContractsPage] fetchContracts: Firestore index missing. Error message:", error.message);
           toast({
             title: "Índice do Firestore Necessário",
             description: (
@@ -88,9 +107,11 @@ export default function ContractsPage() {
             duration: 20000,
           });
       } else {
+        console.error("[ContractsPage] fetchContracts: Generic error fetching contracts:", error.message);
         toast({ title: "Erro ao buscar contratos", description: "Não foi possível carregar a lista de contratos.", variant: "destructive" });
       }
     } finally {
+      console.log('[ContractsPage] fetchContracts: Setting loading to false.');
       setLoading(false);
     }
   }, [user, toast]);
@@ -102,6 +123,7 @@ export default function ContractsPage() {
 
 
   useEffect(() => {
+    console.log('[ContractsPage] useEffect: Calling fetchContracts.');
     fetchContracts();
   }, [fetchContracts]);
 
@@ -139,10 +161,11 @@ export default function ContractsPage() {
   };
 
   const openShareDialog = async (contract: Contrato) => {
-    let contractToShare = { ...contract }; // Clone to avoid direct state mutation
+    let contractToShare = { ...contract }; 
     if (contractToShare.status === 'rascunho' && contractToShare.id) {
+      console.log('[ContractsPage] openShareDialog: Contract is rascunho, attempting to update status for contract ID:', contractToShare.id);
       try {
-        setLoading(true); // Indicate loading for this specific action
+        setLoading(true); 
         const contractRef = doc(db, "contratos", contractToShare.id);
         const newStatus: Contrato['status'] = 'pendente_assinaturas';
         const newSentDate = Timestamp.now();
@@ -152,8 +175,8 @@ export default function ContractsPage() {
           dataEnvioAssinaturas: newSentDate,
           dataUltimaModificacao: Timestamp.now(),
         });
+        console.log('[ContractsPage] openShareDialog: Firestore status updated for contract ID:', contractToShare.id);
 
-        // Update local state for immediate reflection
         contractToShare.status = newStatus;
         contractToShare.dataEnvioAssinaturas = newSentDate;
         contractToShare.dataUltimaModificacao = Timestamp.now();
@@ -165,15 +188,15 @@ export default function ContractsPage() {
         );
         toast({ title: "Status Atualizado!", description: "Contrato agora está pendente de assinaturas." });
       } catch (error) {
-        console.error("Erro ao atualizar status do contrato:", error);
+        console.error("[ContractsPage] openShareDialog: Error updating contract status:", error);
         toast({ title: "Erro ao Atualizar Status", description: "Não foi possível mudar o status para 'Pendente Assinaturas'.", variant: "destructive" });
-        // Decide if you want to proceed with sharing if status update fails. For now, we will.
       } finally {
         setLoading(false);
       }
     }
     setSelectedContractForSharing(contractToShare);
     setIsShareDialogOpen(true);
+    console.log('[ContractsPage] openShareDialog: Dialog opened for contract:', contractToShare);
   };
 
   const getSignerLink = (contractId: string, signerType: 'client' | 'witness1' | 'witness2' | 'provider') => {
@@ -209,7 +232,7 @@ export default function ContractsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading && contracts.length === 0 ? ( // Show loader if loading and no contracts yet
+          {loading && contracts.length === 0 ? ( 
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Carregando contratos...</p>
