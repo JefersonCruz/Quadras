@@ -1,5 +1,5 @@
 
-import {genkit, GenkitPlugin} from 'genkit';
+import {genkit, GenkitPlugin, GenkitOptions} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
 
 const pluginsToUse: GenkitPlugin[] = [];
@@ -23,13 +23,18 @@ try {
   // The application might still run, but AI features will likely fail at runtime.
 }
 
-export const ai = genkit({
+const genkitConfig: GenkitOptions = {
   plugins: pluginsToUse,
-  // If googleAiPlugin failed, this model might not be available.
-  // Genkit might handle an unavailable model gracefully or error at runtime when an AI feature is used.
-  model: googleAiPluginInitialized ? 'googleai/gemini-2.0-flash' : undefined,
-});
+};
+
+if (googleAiPluginInitialized) {
+  genkitConfig.model = 'googleai/gemini-2.0-flash';
+}
+// If googleAiPluginInitialized is false, the model property will not be added to genkitConfig.
+// This might be handled more gracefully by Genkit than explicitly setting model to undefined.
+
+export const ai = genkit(genkitConfig);
 
 if (!googleAiPluginInitialized) {
-    console.warn("Genkit initialized without Google AI plugin. Default model will be undefined. AI operations will likely fail.");
+    console.warn("Genkit initialized without Google AI plugin. AI operations will likely fail as no default model is configured.");
 }
