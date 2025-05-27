@@ -7,6 +7,8 @@
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
+    "move-next": "rm -rf functions/.next && cp -r .next functions/.next",
+    "deploy": "npm run build && npm run move-next && firebase deploy --only functions",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"

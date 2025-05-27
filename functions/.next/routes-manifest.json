@@ -1,0 +1,167 @@
+{
+  "version": 3,
+  "pages404": true,
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "dynamicRoutes": [
+    {
+      "page": "/sign-contract/[contractId]/[signerType]",
+      "regex": "^/sign\\-contract/([^/]+?)/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcontractId": "nxtPcontractId",
+        "nxtPsignerType": "nxtPsignerType"
+      },
+      "namedRegex": "^/sign\\-contract/(?<nxtPcontractId>[^/]+?)/(?<nxtPsignerType>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/admin",
+      "regex": "^/admin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin(?:/)?$"
+    },
+    {
+      "page": "/admin/templates",
+      "regex": "^/admin/templates(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/templates(?:/)?$"
+    },
+    {
+      "page": "/admin/users",
+      "regex": "^/admin/users(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/users(?:/)?$"
+    },
+    {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/dashboard/clients",
+      "regex": "^/dashboard/clients(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/clients(?:/)?$"
+    },
+    {
+      "page": "/dashboard/clients/new",
+      "regex": "^/dashboard/clients/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/clients/new(?:/)?$"
+    },
+    {
+      "page": "/dashboard/company",
+      "regex": "^/dashboard/company(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/company(?:/)?$"
+    },
+    {
+      "page": "/dashboard/contracts",
+      "regex": "^/dashboard/contracts(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/contracts(?:/)?$"
+    },
+    {
+      "page": "/dashboard/contracts/new",
+      "regex": "^/dashboard/contracts/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/contracts/new(?:/)?$"
+    },
+    {
+      "page": "/dashboard/labels",
+      "regex": "^/dashboard/labels(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/labels(?:/)?$"
+    },
+    {
+      "page": "/dashboard/projects",
+      "regex": "^/dashboard/projects(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/projects(?:/)?$"
+    },
+    {
+      "page": "/dashboard/projects/new",
+      "regex": "^/dashboard/projects/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/projects/new(?:/)?$"
+    },
+    {
+      "page": "/dashboard/settings",
+      "regex": "^/dashboard/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/settings(?:/)?$"
+    },
+    {
+      "page": "/dashboard/smart-suggestions",
+      "regex": "^/dashboard/smart\\-suggestions(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/smart\\-suggestions(?:/)?$"
+    },
+    {
+      "page": "/dashboard/technical-sheets",
+      "regex": "^/dashboard/technical\\-sheets(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/technical\\-sheets(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/signup",
+      "regex": "^/signup(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/signup(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "RSC",
+    "varyHeader": "RSC, Next-Router-State-Tree, Next-Router-Prefetch, Next-Router-Segment-Prefetch",
+    "prefetchHeader": "Next-Router-Prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSuffix": ".prefetch.rsc",
+    "prefetchSegmentHeader": "Next-Router-Segment-Prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments"
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  },
+  "rewrites": []
+}

@@ -1,0 +1,23 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/signup/page": "app/signup/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/admin/templates/page": "app/admin/templates/page.js",
+  "/admin/users/page": "app/admin/users/page.js",
+  "/dashboard/clients/page": "app/dashboard/clients/page.js",
+  "/dashboard/contracts/new/page": "app/dashboard/contracts/new/page.js",
+  "/dashboard/clients/new/page": "app/dashboard/clients/new/page.js",
+  "/dashboard/company/page": "app/dashboard/company/page.js",
+  "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
+  "/dashboard/labels/page": "app/dashboard/labels/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/projects/new/page": "app/dashboard/projects/new/page.js",
+  "/dashboard/projects/page": "app/dashboard/projects/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
+  "/dashboard/technical-sheets/page": "app/dashboard/technical-sheets/page.js",
+  "/dashboard/smart-suggestions/page": "app/dashboard/smart-suggestions/page.js",
+  "/sign-contract/[contractId]/[signerType]/page": "app/sign-contract/[contractId]/[signerType]/page.js"
+}

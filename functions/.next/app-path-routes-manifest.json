@@ -1,0 +1,23 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/favicon.ico/route": "/favicon.ico",
+  "/login/page": "/login",
+  "/page": "/",
+  "/signup/page": "/signup",
+  "/admin/page": "/admin",
+  "/admin/templates/page": "/admin/templates",
+  "/admin/users/page": "/admin/users",
+  "/dashboard/clients/page": "/dashboard/clients",
+  "/dashboard/contracts/new/page": "/dashboard/contracts/new",
+  "/dashboard/clients/new/page": "/dashboard/clients/new",
+  "/dashboard/company/page": "/dashboard/company",
+  "/dashboard/contracts/page": "/dashboard/contracts",
+  "/dashboard/labels/page": "/dashboard/labels",
+  "/dashboard/page": "/dashboard",
+  "/dashboard/projects/new/page": "/dashboard/projects/new",
+  "/dashboard/projects/page": "/dashboard/projects",
+  "/dashboard/settings/page": "/dashboard/settings",
+  "/dashboard/technical-sheets/page": "/dashboard/technical-sheets",
+  "/dashboard/smart-suggestions/page": "/dashboard/smart-suggestions",
+  "/sign-contract/[contractId]/[signerType]/page": "/sign-contract/[contractId]/[signerType]"
+}
