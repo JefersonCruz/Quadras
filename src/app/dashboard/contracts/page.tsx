@@ -85,7 +85,7 @@ export default function ContractsPage() {
               </div>
             ),
             variant: "destructive",
-            duration: 20000, 
+            duration: 20000,
           });
       } else {
         toast({ title: "Erro ao buscar contratos", description: "Não foi possível carregar a lista de contratos.", variant: "destructive" });
@@ -110,6 +110,23 @@ export default function ContractsPage() {
     (contract.id && contract.id.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const getStatusClasses = (status: Contrato['status']) => {
+    switch (status) {
+      case 'rascunho':
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300';
+      case 'pendente_assinaturas':
+        return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/60 dark:text-yellow-300';
+      case 'parcialmente_assinado':
+        return 'bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-300';
+      case 'assinado':
+        return 'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300';
+      case 'cancelado':
+        return 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-300';
+      default:
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+    }
+  };
+
   const getStatusLabel = (status: Contrato['status']) => {
     switch (status) {
       case 'rascunho': return 'Rascunho';
@@ -120,24 +137,30 @@ export default function ContractsPage() {
       default: return status;
     }
   };
-  
+
   const openShareDialog = async (contract: Contrato) => {
-    let contractToShare = contract;
-    if (contract.status === 'rascunho' && contract.id) {
+    let contractToShare = { ...contract }; // Clone to avoid direct state mutation
+    if (contractToShare.status === 'rascunho' && contractToShare.id) {
       try {
-        const contractRef = doc(db, "contratos", contract.id);
-        const newStatus = 'pendente_assinaturas';
+        setLoading(true); // Indicate loading for this specific action
+        const contractRef = doc(db, "contratos", contractToShare.id);
+        const newStatus: Contrato['status'] = 'pendente_assinaturas';
         const newSentDate = Timestamp.now();
+
         await updateDoc(contractRef, {
           status: newStatus,
-          dataEnvioAssinaturas: newSentDate
+          dataEnvioAssinaturas: newSentDate,
+          dataUltimaModificacao: Timestamp.now(),
         });
-        
-        contractToShare = { ...contract, status: newStatus, dataEnvioAssinaturas: newSentDate };
-        
+
+        // Update local state for immediate reflection
+        contractToShare.status = newStatus;
+        contractToShare.dataEnvioAssinaturas = newSentDate;
+        contractToShare.dataUltimaModificacao = Timestamp.now();
+
         setContracts(prevContracts =>
           prevContracts.map(c =>
-            c.id === contract.id ? contractToShare : c
+            c.id === contractToShare.id ? contractToShare : c
           )
         );
         toast({ title: "Status Atualizado!", description: "Contrato agora está pendente de assinaturas." });
@@ -145,15 +168,15 @@ export default function ContractsPage() {
         console.error("Erro ao atualizar status do contrato:", error);
         toast({ title: "Erro ao Atualizar Status", description: "Não foi possível mudar o status para 'Pendente Assinaturas'.", variant: "destructive" });
         // Decide if you want to proceed with sharing if status update fails. For now, we will.
+      } finally {
+        setLoading(false);
       }
     }
     setSelectedContractForSharing(contractToShare);
     setIsShareDialogOpen(true);
   };
 
-  const getSignerLink = (contractId: string, signerType: 'client' | 'witness1' | 'witness2') => {
-    // In a real app, the prestador (provider) might sign via the platform itself, not a public link.
-    // For now, we generate links for client and witnesses.
+  const getSignerLink = (contractId: string, signerType: 'client' | 'witness1' | 'witness2' | 'provider') => {
     return `${APP_BASE_URL}/sign-contract/${contractId}/${signerType}`;
   };
 
@@ -186,7 +209,7 @@ export default function ContractsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {loading && contracts.length === 0 ? ( // Show loader if loading and no contracts yet
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Carregando contratos...</p>
@@ -224,18 +247,14 @@ export default function ContractsPage() {
                       <TableCell className="font-medium">{contract.cliente.nome}</TableCell>
                       <TableCell>{contract.tipo === 'padrão' ? 'Padrão' : 'Emergencial'}</TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 text-xs rounded-full font-medium
-                          ${contract.status === 'assinado' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' :
-                            contract.status === 'pendente_assinaturas' || contract.status === 'parcialmente_assinado' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' :
-                            contract.status === 'rascunho' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' :
-                            'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'}`}>
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusClasses(contract.status)}`}>
                           {getStatusLabel(contract.status)}
                         </span>
                       </TableCell>
                       <TableCell>{contract.dataCriacao ? format(contract.dataCriacao.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
                       <TableCell className="text-right space-x-2">
                         {(contract.status === 'rascunho' || contract.status === 'pendente_assinaturas' || contract.status === 'parcialmente_assinado') && (
-                          <Button variant="outline" size="sm" onClick={() => openShareDialog(contract)}>
+                          <Button variant="outline" size="sm" onClick={() => openShareDialog(contract)} disabled={loading}>
                             <Share2 className="mr-1 h-3 w-3" /> Compartilhar
                           </Button>
                         )}
@@ -258,15 +277,27 @@ export default function ContractsPage() {
               <DialogTitle>Compartilhar Contrato para Assinatura</DialogTitle>
               <DialogDescription>
                 Copie e envie os links abaixo para as respectivas partes assinarem o contrato <span className="font-medium">"{selectedContractForSharing.id}"</span>.
+                O prestador de serviço ({selectedContractForSharing.empresaPrestador?.responsavelTecnico || selectedContractForSharing.empresaPrestador?.nome || "Você"}) assina pela plataforma ou link dedicado.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              {selectedContractForSharing.empresaPrestador && (
+                <div>
+                  <Label htmlFor="providerLink" className="font-semibold">Link para o Prestador ({selectedContractForSharing.empresaPrestador.responsavelTecnico || selectedContractForSharing.empresaPrestador.nome}):</Label>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <Input id="providerLink" value={getSignerLink(selectedContractForSharing.id!, 'provider')} readOnly />
+                    <Button type="button" size="sm" onClick={() => copyToClipboard(getSignerLink(selectedContractForSharing.id!, 'provider'), toast)}>
+                      <Copy className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Copiar</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div>
                 <Label htmlFor="clientLink" className="font-semibold">Link para o Cliente ({selectedContractForSharing.cliente.nome}):</Label>
                 <div className="flex items-center space-x-2 mt-1">
                   <Input id="clientLink" value={getSignerLink(selectedContractForSharing.id!, 'client')} readOnly />
                   <Button type="button" size="sm" onClick={() => copyToClipboard(getSignerLink(selectedContractForSharing.id!, 'client'), toast)}>
-                    <Copy className="h-4 w-4" /> <span className="ml-2">Copiar</span>
+                    <Copy className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Copiar</span>
                   </Button>
                 </div>
               </div>
@@ -277,7 +308,7 @@ export default function ContractsPage() {
                   <div className="flex items-center space-x-2 mt-1">
                     <Input id="witness1Link" value={getSignerLink(selectedContractForSharing.id!, 'witness1')} readOnly />
                     <Button type="button" size="sm" onClick={() => copyToClipboard(getSignerLink(selectedContractForSharing.id!, 'witness1'), toast)}>
-                      <Copy className="h-4 w-4" /> <span className="ml-2">Copiar</span>
+                      <Copy className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Copiar</span>
                     </Button>
                   </div>
                 </div>
@@ -289,13 +320,13 @@ export default function ContractsPage() {
                   <div className="flex items-center space-x-2 mt-1">
                     <Input id="witness2Link" value={getSignerLink(selectedContractForSharing.id!, 'witness2')} readOnly />
                     <Button type="button" size="sm" onClick={() => copyToClipboard(getSignerLink(selectedContractForSharing.id!, 'witness2'), toast)}>
-                      <Copy className="h-4 w-4" /> <span className="ml-2">Copiar</span>
+                      <Copy className="h-4 w-4" /> <span className="ml-2 hidden sm:inline">Copiar</span>
                     </Button>
                   </div>
                 </div>
               )}
                <p className="text-xs text-muted-foreground pt-2">
-                Nota: A página pública para assinatura ainda está em desenvolvimento. Estes links são para fins de demonstração da estrutura. O prestador assina pela plataforma.
+                Nota: A página pública para assinatura (`/sign-contract/...`) ainda precisa ser totalmente implementada para coletar as assinaturas.
               </p>
             </div>
             <DialogFooter className="sm:justify-start">
@@ -311,3 +342,4 @@ export default function ContractsPage() {
     </div>
   );
 }
+
