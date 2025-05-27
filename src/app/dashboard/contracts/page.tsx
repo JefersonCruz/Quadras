@@ -34,7 +34,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@/components/ui/scroll-area"; // Added ScrollArea import
 
 // Function to copy text to clipboard
 const copyToClipboard = (text: string, toastFn: (options: any) => void) => {
@@ -243,8 +243,8 @@ export default function ContractsPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
-              icon={<Search className="h-4 w-4 text-muted-foreground" />}
             />
+             {/* Icon can be added using absolute positioning if needed, or by customizing the Input component */}
           </div>
         </CardHeader>
         <CardContent>
@@ -390,7 +390,7 @@ export default function ContractsPage() {
                 ID do Contrato: {selectedContractForViewing.id}
               </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="max-h-[70vh] p-4">
+            <ScrollArea className="max-h-[70vh] p-4"> {/* ScrollArea applied here */}
               <div className="space-y-4">
                 <div>
                   <h4 className="font-semibold text-sm mb-1">Informações Gerais</h4>
@@ -456,7 +456,7 @@ export default function ContractsPage() {
                 )}
 
               </div>
-            </ScrollArea>
+            </ScrollArea> {/* ScrollArea applied here */}
             <DialogFooter className="sm:justify-start pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="secondary">
