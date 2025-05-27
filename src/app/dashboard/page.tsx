@@ -3,8 +3,8 @@ import PageHeader from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, Briefcase, Tag, NotebookText, Sparkles, Building, PlusCircle, HelpCircle, Rocket, Edit3 } from "lucide-react";
-import Image from "next/image";
+import { Users, Briefcase, Tag, NotebookText, Sparkles, Building, PlusCircle, Edit3, FileSignature } from "lucide-react";
+// Removed Image from next/image for debugging
 
 export default function DashboardPage() {
   const quickActions = [
@@ -12,25 +12,26 @@ export default function DashboardPage() {
     { title: "Novo Projeto", href: "/dashboard/projects/new", icon: Briefcase, description: "Inicie um novo projeto para um cliente existente." },
     { title: "Criar Etiqueta", href: "/dashboard/labels", icon: Tag, description: "Gere etiquetas técnicas para identificar circuitos." },
     { title: "Nova Ficha Técnica", href: "/dashboard/technical-sheets", icon: NotebookText, description: "Elabore fichas técnicas detalhadas." },
+    { title: "Novo Contrato", href: "/dashboard/contracts/new", icon: FileSignature, description: "Crie contratos de prestação de serviço." },
   ];
 
   const gettingStartedSteps = [
     { title: "1. Configure sua Empresa", description: "Acesse 'Minha Empresa' e preencha os dados. Eles serão usados em seus documentos.", href: "/dashboard/company", icon: Building },
     { title: "2. Adicione seu Primeiro Cliente", description: "Vá para 'Clientes' e cadastre as informações do seu primeiro cliente.", href: "/dashboard/clients/new", icon: Users },
     { title: "3. Crie um Projeto", description: "Em 'Projetos', inicie um novo projeto e vincule-o a um cliente.", href: "/dashboard/projects/new", icon: Briefcase },
-    { title: "4. Explore as Etiquetas e Fichas", description: "Use as seções 'Etiquetas' e 'Fichas Técnicas' para documentar seu projeto.", href: "/dashboard/labels", icon: Edit3 },
+    { title: "4. Explore as Funcionalidades", description: "Use as seções 'Etiquetas', 'Fichas Técnicas' e 'Contratos' para documentar e gerenciar seu trabalho.", href: "/dashboard/labels", icon: Edit3 },
   ];
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Bem-vindo ao ANODE Lite!"
-        description="Seu painel central para gerenciar clientes, projetos e documentação técnica de forma eficiente."
+        title="Bem-vindo ao Painel ANODE Lite!"
+        description="Seu centro de controle para gerenciar clientes, projetos e documentação técnica de forma eficiente."
       />
 
       <section>
         <h3 className="text-xl font-semibold mb-4 text-foreground">Ações Rápidas</h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {quickActions.map((action) => (
             <Card key={action.href} className="hover:shadow-lg transition-shadow duration-300 ease-in-out">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -54,7 +55,7 @@ export default function DashboardPage() {
           {gettingStartedSteps.map((step) => (
             <Card key={step.title} className="bg-card/70 hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-start gap-4">
-                <div className="p-2 bg-primary/10 rounded-full">
+                <div className="p-3 bg-primary/10 rounded-full">
                     <step.icon className="h-6 w-6 text-primary" />
                 </div>
                 <div>
@@ -79,15 +80,12 @@ export default function DashboardPage() {
             <CardDescription>Acelere sua documentação com sugestões de templates baseadas em IA para etiquetas e fichas técnicas.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="relative aspect-video mb-4 rounded-md overflow-hidden">
-                <Image
-                    src="https://placehold.co/600x300.png"
-                    alt="Smart Suggestions Illustration"
-                    layout="fill"
-                    objectFit="cover"
-                    className="transition-transform duration-300 hover:scale-105"
-                    data-ai-hint="technology abstract"
-                />
+            {/* Placeholder for Image */}
+            <div 
+              className="relative aspect-video mb-4 rounded-md overflow-hidden bg-muted flex items-center justify-center"
+              data-ai-hint="technology abstract"
+            >
+              <p className="text-muted-foreground text-sm">Visualização de IA</p>
             </div>
             <Button asChild>
               <Link href="/dashboard/smart-suggestions">Explorar Sugestões IA</Link>
@@ -100,15 +98,12 @@ export default function DashboardPage() {
             <CardDescription>Mantenha os dados da sua empresa atualizados para profissionalismo em todos os seus documentos e relatórios.</CardDescription>
           </CardHeader>
           <CardContent>
-             <div className="relative aspect-video mb-4 rounded-md overflow-hidden">
-                <Image
-                    src="https://placehold.co/600x300.png"
-                    alt="Company Profile Illustration"
-                    layout="fill"
-                    objectFit="cover"
-                    className="transition-transform duration-300 hover:scale-105"
-                    data-ai-hint="office building"
-                />
+             {/* Placeholder for Image */}
+            <div 
+              className="relative aspect-video mb-4 rounded-md overflow-hidden bg-muted flex items-center justify-center"
+              data-ai-hint="office building"
+            >
+              <p className="text-muted-foreground text-sm">Visualização Perfil Empresa</p>
             </div>
             <Button asChild>
               <Link href="/dashboard/company">Gerenciar Perfil da Empresa</Link>
