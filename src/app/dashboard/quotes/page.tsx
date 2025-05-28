@@ -21,6 +21,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -33,6 +43,9 @@ export default function QuotesPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const [selectedQuoteForViewing, setSelectedQuoteForViewing] = useState<Orcamento | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+
   const fetchData = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -40,13 +53,11 @@ export default function QuotesPage() {
     }
     setLoading(true);
     try {
-      // Fetch clients
       const clientQuery = query(collection(db, "clientes"), where("owner", "==", user.uid));
       const clientSnapshot = await getDocs(clientQuery);
       const clientsData = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
       setClients(clientsData);
 
-      // Fetch quotes
       const quotesQuery = query(
         collection(db, "orcamentos"),
         where("createdBy", "==", user.uid),
@@ -100,7 +111,7 @@ export default function QuotesPage() {
       case 'aprovado':
         return 'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300';
       case 'rejeitado':
-      case 'convertido_os': // Assuming converted to order is also a kind of final state
+      case 'convertido_os':
         return 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-300';
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
@@ -118,6 +129,10 @@ export default function QuotesPage() {
     }
   };
 
+  const openViewDialog = (quote: Orcamento) => {
+    setSelectedQuoteForViewing(quote);
+    setIsViewDialogOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -197,12 +212,12 @@ export default function QuotesPage() {
                       <TableCell className="text-right space-x-1">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openViewDialog(quote)}>
                               <Eye className="h-4 w-4" />
                               <span className="sr-only">Ver Detalhes</span>
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent><p>Ver Detalhes (em breve)</p></TooltipContent>
+                          <TooltipContent><p>Ver Detalhes</p></TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -232,6 +247,59 @@ export default function QuotesPage() {
           )}
         </CardContent>
       </Card>
+
+      {selectedQuoteForViewing && (
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Detalhes do Orçamento</DialogTitle>
+              <DialogDescription>
+                Orçamento Nº: {selectedQuoteForViewing.numeroOrcamento}
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh] p-1 pr-3">
+              <div className="space-y-3 text-sm py-4">
+                <p><strong>Cliente:</strong> {getClientName(selectedQuoteForViewing.clienteId)}</p>
+                {selectedQuoteForViewing.projetoId && <p><strong>Projeto Vinculado:</strong> {projects.find(p => p.id === selectedQuoteForViewing.projetoId)?.nome || 'N/A'}</p>}
+                <p><strong>Data de Criação:</strong> {selectedQuoteForViewing.dataCriacao ? format(selectedQuoteForViewing.dataCriacao.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'N/A'}</p>
+                <p><strong>Data de Validade:</strong> {selectedQuoteForViewing.dataValidade ? format(selectedQuoteForViewing.dataValidade.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</p>
+                <p><strong>Valor Total Estimado:</strong> R$ {selectedQuoteForViewing.valorTotalEstimado.toFixed(2)}</p>
+                <p><strong>Status:</strong> <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${getStatusClasses(selectedQuoteForViewing.status)}`}>{getStatusLabel(selectedQuoteForViewing.status)}</span></p>
+                
+                <div className="pt-2">
+                  <h4 className="font-semibold mb-1">Descrição dos Serviços/Escopo:</h4>
+                  <p className="whitespace-pre-wrap bg-muted/50 p-2 rounded-md">{selectedQuoteForViewing.descricaoServicos || "Nenhuma descrição fornecida."}</p>
+                </div>
+
+                {selectedQuoteForViewing.observacoes && (
+                  <div className="pt-2">
+                    <h4 className="font-semibold mb-1">Observações:</h4>
+                    <p className="whitespace-pre-wrap bg-muted/50 p-2 rounded-md">{selectedQuoteForViewing.observacoes}</p>
+                  </div>
+                )}
+
+                {(selectedQuoteForViewing.empresaNome || selectedQuoteForViewing.empresaCnpj) && (
+                    <div className="pt-3 mt-3 border-t">
+                        <h4 className="font-semibold mb-1">Emitido por:</h4>
+                        <p>{selectedQuoteForViewing.empresaNome || "Empresa não informada"}</p>
+                        {selectedQuoteForViewing.empresaCnpj && <p className="text-xs text-muted-foreground">CNPJ: {selectedQuoteForViewing.empresaCnpj}</p>}
+                        {selectedQuoteForViewing.empresaTelefone && <p className="text-xs text-muted-foreground">Telefone: {selectedQuoteForViewing.empresaTelefone}</p>}
+                        {selectedQuoteForViewing.empresaEmail && <p className="text-xs text-muted-foreground">Email: {selectedQuoteForViewing.empresaEmail}</p>}
+                    </div>
+                )}
+              </div>
+            </ScrollArea>
+            <DialogFooter className="sm:justify-start">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Fechar
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
     </div>
   );
 }
