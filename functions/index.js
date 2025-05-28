@@ -24,10 +24,12 @@ const app = next({
 const handle = app.getRequestHandler();
 
 export const nextApp = onRequest({ region: REGION }, async (req, res) => {
-  logger.info("NextApp Request URL:", req.originalUrl);
+  logger.info(`[NextApp] Request received for URL: ${req.originalUrl}`);
 
   try {
+    logger.info("[NextApp] Preparing Next.js app...");
     await app.prepare(); // prepares the Next.js app
+    logger.info("[NextApp] Next.js app prepared. Delegating to Next.js request handler.");
     return handle(req, res); // delegates the request to Next
   } catch (err) {
     logger.error("❌ Erro no Next.js:", err, { stack: err.stack });
