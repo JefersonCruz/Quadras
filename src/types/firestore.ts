@@ -157,7 +157,7 @@ export interface Contrato {
   dataUltimaModificacao?: Timestamp;
   dataEnvioAssinaturas?: Timestamp;
   dataFinalizacaoAssinaturas?: Timestamp;
-  empresaPrestador: EmpresaPrestadorContrato; // Changed to non-optional as it's always set
+  empresaPrestador: EmpresaPrestadorContrato;
   taxaDeslocamento?: number;
   termosEmergencial?: string;
 }
@@ -185,6 +185,6 @@ export interface GlobalLabelTemplate {
   id?: string;
   name: string;
   description: string;
-  // createdBy?: string; // Admin UID
-  // createdAt?: Timestamp;
+  createdBy?: string; // Admin UID
+  createdAt?: Timestamp;
 }

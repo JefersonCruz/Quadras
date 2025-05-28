@@ -30,9 +30,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { GlobalLabelTemplate } from "@/types/firestore"; // Assuming type is defined
+import type { GlobalLabelTemplate } from "@/types/firestore";
+import { db } from "@/lib/firebase/config";
+import { useAuth } from "@/contexts/AuthContext";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
 
-// Mock data for label templates
+// Mock data for label templates - will be replaced by fetched data later
 const mockLabelTemplates: GlobalLabelTemplate[] = [
   { id: "1", name: "Padrão Residencial - Iluminação", description: "Etiqueta para circuitos de iluminação em quadros residenciais." },
   { id: "2", name: "Padrão Residencial - Tomadas TUG", description: "Etiqueta para circuitos de Tomadas de Uso Geral." },
@@ -50,6 +53,7 @@ type LabelTemplateFormData = z.infer<typeof labelTemplateSchema>;
 
 export default function AdminTemplatesPage() {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get current admin user
   const [isLabelDialogFormOpen, setIsLabelDialogFormOpen] = useState(false);
   const [editingLabelTemplate, setEditingLabelTemplate] = useState<GlobalLabelTemplate | null>(null); // For future edit
   const [formSubmitting, setFormSubmitting] = useState(false);
@@ -66,19 +70,46 @@ export default function AdminTemplatesPage() {
   };
 
   const onLabelTemplateSubmit = async (data: LabelTemplateFormData) => {
+    if (!user || !user.uid) {
+      toast({
+        title: "Erro de Autenticação",
+        description: "Usuário não autenticado. Faça login novamente.",
+        variant: "destructive",
+      });
+      setFormSubmitting(false);
+      return;
+    }
+
     setFormSubmitting(true);
-    // TODO: Implement actual saving to Firestore
-    console.log("Submitting new label template:", data);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-    
-    toast({
-      title: editingLabelTemplate ? "Template de Etiqueta Atualizado!" : "Novo Template de Etiqueta Adicionado!",
-      description: `O template "${data.name}" foi salvo com sucesso (simulação).`,
-    });
-    
-    setIsLabelDialogFormOpen(false);
-    setFormSubmitting(false);
-    // TODO: Refetch templates list after saving
+    try {
+      const newTemplateData: Omit<GlobalLabelTemplate, 'id'> = {
+        name: data.name,
+        description: data.description,
+        createdBy: user.uid,
+        createdAt: Timestamp.now(),
+      };
+      
+      // Save to Firestore in 'globalLabelTemplates' collection
+      await addDoc(collection(db, "globalLabelTemplates"), newTemplateData);
+      
+      toast({
+        title: editingLabelTemplate ? "Template de Etiqueta Atualizado!" : "Novo Template de Etiqueta Adicionado!",
+        description: `O template "${data.name}" foi salvo com sucesso.`,
+      });
+      
+      setIsLabelDialogFormOpen(false);
+      // TODO: Refetch templates list after saving to update the table
+      // For now, we rely on mock data for display.
+    } catch (error) {
+      console.error("Error saving label template:", error);
+      toast({
+        title: "Erro ao Salvar",
+        description: "Não foi possível salvar o template de etiqueta.",
+        variant: "destructive",
+      });
+    } finally {
+      setFormSubmitting(false);
+    }
   };
 
 
