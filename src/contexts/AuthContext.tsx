@@ -24,20 +24,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<Usuario | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [authResolved, setAuthResolved] = useState(false); // Initially false
+  const [authResolved, setAuthResolved] = useState(false);
 
   useEffect(() => {
     let didUnsubscribe = false;
+    console.log("[AuthContext] useEffect mount. didUnsubscribe initially false.");
 
     const loadingTimeout = setTimeout(() => {
-      if (!didUnsubscribe && !authResolved) { // Only force if not already resolved
+      if (!didUnsubscribe && !authResolved) {
         console.warn(
-          "AuthContext: Loading timeout reached (15s). Forcing auth to resolved state."
+          "[AuthContext] Auth check timeout (15s). Forcing authResolved=true."
         );
-        if (!didUnsubscribe) { // Check again before setting state
-          setUser(null); // Default to no user if timeout
+        if (!didUnsubscribe) {
+          setUser(null);
           setUserData(null);
           setIsAdmin(false);
+          console.log("[AuthContext] Setting authResolved to true in TIMEOUT.");
           setAuthResolved(true);
         }
       }
@@ -46,8 +48,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let unsubscribe: (() => void) | undefined;
 
     try {
+      console.log("[AuthContext] Setting up onAuthStateChanged listener.");
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (didUnsubscribe) return;
+        console.log("[AuthContext] onAuthStateChanged triggered. firebaseUser:", firebaseUser ? firebaseUser.uid : null);
+        if (didUnsubscribe) {
+          console.log("[AuthContext] onAuthStateChanged: Component unmounted, aborting state updates.");
+          return;
+        }
 
         try {
           if (firebaseUser) {
@@ -59,21 +66,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               const appUserData = userDocSnap.data() as Usuario;
               setUserData(appUserData);
               setIsAdmin(appUserData.role === "admin");
+              console.log("[AuthContext] User data found:", appUserData);
             } else {
               console.warn(
-                `AuthContext: User document ${firebaseUser.uid} not found.`
+                `[AuthContext] User document ${firebaseUser.uid} not found in Firestore.`
               );
-              setUserData(null); 
+              setUserData(null);
               setIsAdmin(false);
             }
           } else {
             setUser(null);
             setUserData(null);
             setIsAdmin(false);
+            console.log("[AuthContext] No firebaseUser, user set to null.");
           }
-        } catch (error) {
+        } catch (error: any) {
           const err = error as { code?: string; message?: string };
-          console.warn("AuthContext: Error fetching user data:", err);
+          console.warn("[AuthContext] Error fetching user data from Firestore:", err);
           if (err.code === "auth/network-request-failed") {
             console.warn(
               "⚠️ Firebase Auth: Network request failed. Check internet connection and Firebase service status."
@@ -86,33 +95,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } finally {
           if (!didUnsubscribe) {
-            setAuthResolved(true); 
+            console.log("[AuthContext] Setting authResolved to true in onAuthStateChanged FINALLY block.");
+            setAuthResolved(true);
             clearTimeout(loadingTimeout);
           }
         }
       });
     } catch (setupError) {
       console.error(
-        "AuthContext: Error setting up auth listener:",
+        "[AuthContext] CRITICAL: Error setting up onAuthStateChanged listener:",
         setupError
       );
       if (!didUnsubscribe) {
         setUser(null);
         setUserData(null);
         setIsAdmin(false);
-        setAuthResolved(true); 
+        console.log("[AuthContext] Setting authResolved to true in onAuthStateChanged SETUP CATCH block.");
+        setAuthResolved(true);
         clearTimeout(loadingTimeout);
       }
     }
 
     return () => {
+      console.log("[AuthContext] useEffect cleanup. Setting didUnsubscribe to true.");
       didUnsubscribe = true;
       if (unsubscribe) {
+        console.log("[AuthContext] Unsubscribing from onAuthStateChanged.");
         unsubscribe();
       }
-      clearTimeout(loadingTimeout); 
+      clearTimeout(loadingTimeout);
+      console.log("[AuthContext] Cleared loadingTimeout.");
     };
-  }, []); // Empty dependency array: run only on mount and unmount
+  }, []);
 
   if (!authResolved) {
     return (
