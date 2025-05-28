@@ -3,8 +3,8 @@ import { onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import next from "next";
 import admin from "firebase-admin";
-import ots from "opentimestamps"; // Importar com um alias, pois 'opentimestamps' é usado como namespace
-import { Buffer } from "buffer"; // Importar Buffer explicitamente
+// import ots from "opentimestamps"; // Temporarily commented out
+// import { Buffer } from "buffer"; // Temporarily commented out if only used by ots
 
 // Inicializar Firebase Admin SDK apenas uma vez
 if (admin.apps.length === 0) {
@@ -38,8 +38,10 @@ export const nextApp = onRequest({ region: REGION }, async (req, res) => {
 });
 
 // Firestore trigger para registrar assinatura na blockchain
-import { onDocumentWritten } from "firebase-functions/v2/firestore";
+// import { onDocumentWritten } from "firebase-functions/v2/firestore";
 
+/*
+// Temporarily commented out registrarAssinaturaNaBlockchain
 export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{contratoId}", async (event) => {
     const contratoId = event.params.contratoId;
     logger.info(`[registrarAssinaturaNaBlockchain] Triggered for contratoId: ${contratoId}`);
@@ -113,4 +115,4 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
 
     return null;
   });
-
+*/
