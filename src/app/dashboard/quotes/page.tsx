@@ -8,7 +8,7 @@ import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText } from "l
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
-import type { Orcamento, Cliente } from "@/types/firestore";
+import type { Orcamento, Cliente, Projeto } from "@/types/firestore";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +40,7 @@ export default function QuotesPage() {
   const { toast } = useToast();
   const [quotes, setQuotes] = useState<Orcamento[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
+  const [projects, setProjects] = useState<Projeto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -58,6 +59,11 @@ export default function QuotesPage() {
       const clientsData = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
       setClients(clientsData);
 
+      const projectQuery = query(collection(db, "projetos"), where("owner", "==", user.uid));
+      const projectSnapshot = await getDocs(projectQuery);
+      const projectsData = projectSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Projeto));
+      setProjects(projectsData);
+
       const quotesQuery = query(
         collection(db, "orcamentos"),
         where("createdBy", "==", user.uid),
@@ -72,9 +78,17 @@ export default function QuotesPage() {
        if (error.code === 'failed-precondition' && error.message.includes('index')) {
         toast({
             title: "Índice do Firestore Necessário",
-            description: "A consulta de orçamentos requer um índice. Por favor, crie-o no Firebase Console.",
+            description: (
+              <div>
+                A consulta de orçamentos requer um índice que não existe.
+                <a href={extractFirebaseIndexLink(error.message)} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 hover:text-blue-800 ml-1">
+                  Clique aqui para criar o índice no Firebase Console.
+                </a>
+                <p className="text-xs mt-1">Detalhes do erro: {error.message}</p>
+              </div>
+            ),
             variant: "destructive",
-            duration: 10000,
+            duration: 20000,
           });
       } else {
         toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar orçamentos ou clientes.", variant: "destructive" });
@@ -84,6 +98,11 @@ export default function QuotesPage() {
     }
   }, [user, toast]);
 
+  const extractFirebaseIndexLink = (errorMessage: string): string => {
+    const match = errorMessage.match(/(https?:\/\/[^\s]+)/);
+    return match ? match[0] : "https://console.firebase.google.com/";
+  };
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -92,6 +111,12 @@ export default function QuotesPage() {
     if (!clientId) return "N/A";
     const client = clients.find(c => c.id === clientId);
     return client?.nome || "Cliente não encontrado";
+  };
+
+  const getProjectName = (projectId: string | undefined): string => {
+    if (!projectId) return "N/A";
+    const project = projects.find(p => p.id === projectId);
+    return project?.nome || "Projeto não vinculado";
   };
 
   const filteredQuotes = quotes.filter(quote => {
@@ -111,7 +136,7 @@ export default function QuotesPage() {
       case 'aprovado':
         return 'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300';
       case 'rejeitado':
-      case 'convertido_os':
+      case 'convertido_os': // Assuming 'convertido_os' also indicates a "finalized" or "closed" state
         return 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-300';
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
@@ -254,42 +279,61 @@ export default function QuotesPage() {
             <DialogHeader>
               <DialogTitle>Detalhes do Orçamento</DialogTitle>
               <DialogDescription>
-                Orçamento Nº: {selectedQuoteForViewing.numeroOrcamento}
+                Orçamento Nº: <span className="font-semibold">{selectedQuoteForViewing.numeroOrcamento}</span>
+                {selectedQuoteForViewing.id && <span className="block text-xs text-muted-foreground">ID: {selectedQuoteForViewing.id}</span>}
               </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="max-h-[60vh] p-1 pr-3">
-              <div className="space-y-3 text-sm py-4">
-                <p><strong>Cliente:</strong> {getClientName(selectedQuoteForViewing.clienteId)}</p>
-                {selectedQuoteForViewing.projetoId && <p><strong>Projeto Vinculado:</strong> {projects.find(p => p.id === selectedQuoteForViewing.projetoId)?.nome || 'N/A'}</p>}
-                <p><strong>Data de Criação:</strong> {selectedQuoteForViewing.dataCriacao ? format(selectedQuoteForViewing.dataCriacao.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'N/A'}</p>
-                <p><strong>Data de Validade:</strong> {selectedQuoteForViewing.dataValidade ? format(selectedQuoteForViewing.dataValidade.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</p>
-                <p><strong>Valor Total Estimado:</strong> R$ {selectedQuoteForViewing.valorTotalEstimado.toFixed(2)}</p>
-                <p><strong>Status:</strong> <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${getStatusClasses(selectedQuoteForViewing.status)}`}>{getStatusLabel(selectedQuoteForViewing.status)}</span></p>
+            <ScrollArea className="max-h-[65vh] p-1 pr-3">
+              <div className="space-y-4 text-sm py-4">
                 
-                <div className="pt-2">
-                  <h4 className="font-semibold mb-1">Descrição dos Serviços/Escopo:</h4>
-                  <p className="whitespace-pre-wrap bg-muted/50 p-2 rounded-md">{selectedQuoteForViewing.descricaoServicos || "Nenhuma descrição fornecida."}</p>
+                <div className="p-3 border rounded-md bg-muted/30">
+                  <h4 className="font-semibold mb-1 text-foreground">Cliente</h4>
+                  <p><strong>Nome:</strong> {getClientName(selectedQuoteForViewing.clienteId)}</p>
+                  {projects.find(p => p.id === selectedQuoteForViewing.projetoId) && (
+                    <p><strong>Projeto Vinculado:</strong> {getProjectName(selectedQuoteForViewing.projetoId)}</p>
+                  )}
+                </div>
+
+                <div className="p-3 border rounded-md">
+                  <h4 className="font-semibold mb-1 text-foreground">Datas e Status</h4>
+                  <p><strong>Data de Criação:</strong> {selectedQuoteForViewing.dataCriacao ? format(selectedQuoteForViewing.dataCriacao.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}</p>
+                  <p><strong>Data de Validade:</strong> {selectedQuoteForViewing.dataValidade ? format(selectedQuoteForViewing.dataValidade.toDate(), "dd/MM/yyyy", { locale: ptBR }) : 'N/A'}</p>
+                  <p><strong>Status:</strong> <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${getStatusClasses(selectedQuoteForViewing.status)}`}>{getStatusLabel(selectedQuoteForViewing.status)}</span></p>
+                </div>
+                
+                <div className="p-3 border rounded-md">
+                  <h4 className="font-semibold mb-1 text-foreground">Serviços e Valor</h4>
+                  <div>
+                    <h5 className="font-medium text-muted-foreground">Descrição dos Serviços/Escopo:</h5>
+                    <p className="whitespace-pre-wrap mt-1">{selectedQuoteForViewing.descricaoServicos || "Nenhuma descrição fornecida."}</p>
+                  </div>
+                  <p className="mt-2"><strong>Valor Total Estimado:</strong> <span className="font-semibold text-lg">R$ {selectedQuoteForViewing.valorTotalEstimado.toFixed(2)}</span></p>
                 </div>
 
                 {selectedQuoteForViewing.observacoes && (
-                  <div className="pt-2">
-                    <h4 className="font-semibold mb-1">Observações:</h4>
-                    <p className="whitespace-pre-wrap bg-muted/50 p-2 rounded-md">{selectedQuoteForViewing.observacoes}</p>
+                  <div className="p-3 border rounded-md">
+                    <h4 className="font-semibold mb-1 text-foreground">Observações:</h4>
+                    <p className="whitespace-pre-wrap">{selectedQuoteForViewing.observacoes}</p>
                   </div>
                 )}
 
                 {(selectedQuoteForViewing.empresaNome || selectedQuoteForViewing.empresaCnpj) && (
-                    <div className="pt-3 mt-3 border-t">
-                        <h4 className="font-semibold mb-1">Emitido por:</h4>
+                    <div className="p-3 border rounded-md bg-muted/30">
+                        <h4 className="font-semibold mb-1 text-foreground">Emitido por:</h4>
                         <p>{selectedQuoteForViewing.empresaNome || "Empresa não informada"}</p>
                         {selectedQuoteForViewing.empresaCnpj && <p className="text-xs text-muted-foreground">CNPJ: {selectedQuoteForViewing.empresaCnpj}</p>}
                         {selectedQuoteForViewing.empresaTelefone && <p className="text-xs text-muted-foreground">Telefone: {selectedQuoteForViewing.empresaTelefone}</p>}
                         {selectedQuoteForViewing.empresaEmail && <p className="text-xs text-muted-foreground">Email: {selectedQuoteForViewing.empresaEmail}</p>}
+                        {selectedQuoteForViewing.empresaLogotipoUrl && (
+                            <div className="mt-2">
+                                <img src={selectedQuoteForViewing.empresaLogotipoUrl} alt="Logotipo da Empresa" className="max-h-12 border rounded p-1 bg-background" data-ai-hint="company logo" />
+                            </div>
+                        )}
                     </div>
                 )}
               </div>
             </ScrollArea>
-            <DialogFooter className="sm:justify-start">
+            <DialogFooter className="sm:justify-start pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline">
                   Fechar
@@ -303,3 +347,4 @@ export default function QuotesPage() {
     </div>
   );
 }
+
