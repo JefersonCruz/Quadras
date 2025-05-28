@@ -4,64 +4,120 @@
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, Calculator, Search, Loader2 } from "lucide-react";
+import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText } from "lucide-react";
 import Link from "next/link";
-// import { useAuth } from "@/contexts/AuthContext";
-// import { db } from "@/lib/firebase/config";
-// import type { Orcamento } from "@/types/firestore";
-// import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
-// import { useEffect, useState, useCallback } from "react";
-// import { useToast } from "@/hooks/use-toast";
-// import { Input } from "@/components/ui/input";
-// import {
-//   Table,
-//   TableBody,
-//   TableCell,
-//   TableHead,
-//   TableHeader,
-//   TableRow,
-// } from "@/components/ui/table";
-// import { format } from 'date-fns';
-// import { ptBR } from 'date-fns/locale';
+import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/firebase/config";
+import type { Orcamento, Cliente } from "@/types/firestore";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { useEffect, useState, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function QuotesPage() {
-  // const { user } = useAuth();
-  // const { toast } = useToast();
-  // const [quotes, setQuotes] = useState<Orcamento[]>([]);
-  // const [loading, setLoading] = useState(true);
-  // const [searchTerm, setSearchTerm] = useState("");
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [quotes, setQuotes] = useState<Orcamento[]>([]);
+  const [clients, setClients] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // const fetchQuotes = useCallback(async () => {
-  //   if (!user) {
-  //     setLoading(false);
-  //     return;
-  //   }
-  //   setLoading(true);
-  //   try {
-  //     const q = query(
-  //       collection(db, "orcamentos"),
-  //       where("createdBy", "==", user.uid),
-  //       orderBy("dataCriacao", "desc")
-  //     );
-  //     const querySnapshot = await getDocs(q);
-  //     const quotesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Orcamento));
-  //     setQuotes(quotesData);
-  //   } catch (error) {
-  //     console.error("Error fetching quotes:", error);
-  //     toast({ title: "Erro ao buscar orçamentos", description: "Não foi possível carregar a lista de orçamentos.", variant: "destructive" });
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // }, [user, toast]);
+  const fetchData = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      // Fetch clients
+      const clientQuery = query(collection(db, "clientes"), where("owner", "==", user.uid));
+      const clientSnapshot = await getDocs(clientQuery);
+      const clientsData = clientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
+      setClients(clientsData);
 
-  // useEffect(() => {
-  //   fetchQuotes();
-  // }, [fetchQuotes]);
+      // Fetch quotes
+      const quotesQuery = query(
+        collection(db, "orcamentos"),
+        where("createdBy", "==", user.uid),
+        orderBy("dataCriacao", "desc")
+      );
+      const quotesSnapshot = await getDocs(quotesQuery);
+      const quotesData = quotesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Orcamento));
+      setQuotes(quotesData);
 
-  // const filteredQuotes = quotes.filter(quote =>
-  //   quote.numeroOrcamento.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //   (quote.clienteId && quote.clienteId.toLowerCase().includes(searchTerm.toLowerCase())) // Needs client name lookup
-  // );
+    } catch (error: any) {
+      console.error("Error fetching quotes or clients:", error);
+       if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        toast({
+            title: "Índice do Firestore Necessário",
+            description: "A consulta de orçamentos requer um índice. Por favor, crie-o no Firebase Console.",
+            variant: "destructive",
+            duration: 10000,
+          });
+      } else {
+        toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar orçamentos ou clientes.", variant: "destructive" });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [user, toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const getClientName = (clientId: string | undefined): string => {
+    if (!clientId) return "N/A";
+    const client = clients.find(c => c.id === clientId);
+    return client?.nome || "Cliente não encontrado";
+  };
+
+  const filteredQuotes = quotes.filter(quote => {
+    const clientName = getClientName(quote.clienteId).toLowerCase();
+    const searchTermLower = searchTerm.toLowerCase();
+    return quote.numeroOrcamento.toLowerCase().includes(searchTermLower) ||
+           clientName.includes(searchTermLower) ||
+           (quote.id && quote.id.toLowerCase().includes(searchTermLower));
+  });
+
+  const getStatusClasses = (status: Orcamento['status']) => {
+    switch (status) {
+      case 'rascunho':
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300';
+      case 'enviado':
+        return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/60 dark:text-yellow-300';
+      case 'aprovado':
+        return 'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300';
+      case 'rejeitado':
+      case 'convertido_os': // Assuming converted to order is also a kind of final state
+        return 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-300';
+      default:
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+    }
+  };
+
+  const getStatusLabel = (status: Orcamento['status']) => {
+    switch (status) {
+      case 'rascunho': return 'Rascunho';
+      case 'enviado': return 'Enviado';
+      case 'aprovado': return 'Aprovado';
+      case 'rejeitado': return 'Rejeitado';
+      case 'convertido_os': return 'Convertido em OS';
+      default: return status;
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -80,39 +136,39 @@ export default function QuotesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Lista de Orçamentos</CardTitle>
-          {/* <div className="mt-2">
+          <div className="mt-2">
             <Input
-              placeholder="Buscar orçamento por número ou cliente..."
+              placeholder="Buscar por Nº, cliente ou ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
             />
-          </div> */}
+          </div>
         </CardHeader>
         <CardContent>
-          {/* {loading ? (
+          {loading ? (
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Carregando orçamentos...</p>
             </div>
-          ) : filteredQuotes.length === 0 ? ( */}
+          ) : filteredQuotes.length === 0 ? (
             <div className="text-center py-8">
               <Calculator className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-xl font-semibold text-foreground">Nenhum orçamento encontrado.</h3>
               <p className="text-muted-foreground">
-                {/* {searchTerm ? "Tente um termo de busca diferente." : "Comece criando seu primeiro orçamento."} */}
-                Listagem de orçamentos e funcionalidades de busca em breve.
+                {searchTerm ? "Tente um termo de busca diferente." : "Comece criando seu primeiro orçamento."}
               </p>
-              {/* {!searchTerm && ( */}
+              {!searchTerm && (
                 <Button asChild className="mt-4">
                   <Link href="/dashboard/quotes/new">
                     <PlusCircle className="mr-2 h-4 w-4" /> Criar Novo Orçamento
                   </Link>
                 </Button>
-              {/* )} */}
+              )}
             </div>
-          {/* ) : (
+          ) : (
             <div className="overflow-x-auto">
+              <TooltipProvider>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -129,25 +185,51 @@ export default function QuotesPage() {
                   {filteredQuotes.map((quote) => (
                     <TableRow key={quote.id}>
                       <TableCell className="font-medium">{quote.numeroOrcamento}</TableCell>
-                      <TableCell> {quote.clienteId} Placeholder </TableCell>
+                      <TableCell>{getClientName(quote.clienteId)}</TableCell>
                       <TableCell>{quote.dataCriacao ? format(quote.dataCriacao.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
                       <TableCell>{quote.dataValidade ? format(quote.dataValidade.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
                       <TableCell>R$ {quote.valorTotalEstimado.toFixed(2)}</TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 text-xs rounded-full font-medium`}>
-                          {quote.status}
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusClasses(quote.status)}`}>
+                          {getStatusLabel(quote.status)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm">Ver</Button>
-                        <Button variant="outline" size="sm">Editar</Button>
+                      <TableCell className="text-right space-x-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                              <Eye className="h-4 w-4" />
+                              <span className="sr-only">Ver Detalhes</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Ver Detalhes (em breve)</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                              <Edit3 className="h-4 w-4" />
+                              <span className="sr-only">Editar Orçamento</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Editar Orçamento (em breve)</p></TooltipContent>
+                        </Tooltip>
+                         <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                              <FileText className="h-4 w-4" />
+                              <span className="sr-only">Baixar PDF</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Baixar PDF (em breve)</p></TooltipContent>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              </TooltipProvider>
             </div>
-          )} */}
+          )}
         </CardContent>
       </Card>
     </div>
