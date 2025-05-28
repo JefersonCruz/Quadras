@@ -30,7 +30,7 @@ export const nextApp = onRequest({ region: REGION }, async (req, res) => {
     await app.prepare(); // prepara o app Next.js
     return handle(req, res); // delega o request para o Next
   } catch (err) {
-    logger.error("Error in nextApp onRequest handler:", err, { stack: err.stack });
+    logger.error("❌ Erro no Next.js:", err, { stack: err.stack });
     if (!res.headersSent) {
       res.status(500).send("Erro interno do servidor");
     }
