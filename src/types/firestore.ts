@@ -140,6 +140,7 @@ export interface EmpresaPrestadorContrato {
     cnpj?: string;
     endereco?: string;
     responsavelTecnico?: string;
+    email?: string; // Added email for provider for signature context
 }
 
 export interface Contrato {
@@ -156,7 +157,7 @@ export interface Contrato {
   dataUltimaModificacao?: Timestamp;
   dataEnvioAssinaturas?: Timestamp;
   dataFinalizacaoAssinaturas?: Timestamp;
-  empresaPrestador?: EmpresaPrestadorContrato;
+  empresaPrestador: EmpresaPrestadorContrato; // Changed to non-optional as it's always set
   taxaDeslocamento?: number;
   termosEmergencial?: string;
 }
@@ -177,4 +178,13 @@ export interface Relatorio {
   dataGeracao: Timestamp;
   conteudo: any;
   pdfUrl?: string;
+}
+
+// --- Global Templates ---
+export interface GlobalLabelTemplate {
+  id?: string;
+  name: string;
+  description: string;
+  // createdBy?: string; // Admin UID
+  // createdAt?: Timestamp;
 }

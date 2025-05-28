@@ -1,9 +1,10 @@
 
-"use client"; // Added "use client" as useToast can only be used in client components
+"use client";
 
+import { useState } from "react";
 import PageHeader from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, FileText, Tag, Edit, Trash2, PlusCircle } from "lucide-react"; // Added PlusCircle
+import { Settings, FileText, Tag, Edit, Trash2, PlusCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,10 +14,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast"; // Added useToast
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import type { GlobalLabelTemplate } from "@/types/firestore"; // Assuming type is defined
 
 // Mock data for label templates
-const mockLabelTemplates = [
+const mockLabelTemplates: GlobalLabelTemplate[] = [
   { id: "1", name: "Padrão Residencial - Iluminação", description: "Etiqueta para circuitos de iluminação em quadros residenciais." },
   { id: "2", name: "Padrão Residencial - Tomadas TUG", description: "Etiqueta para circuitos de Tomadas de Uso Geral." },
   { id: "3", name: "Padrão Comercial - Força Motriz", description: "Etiqueta para motores e equipamentos de força." },
@@ -24,15 +41,46 @@ const mockLabelTemplates = [
   { id: "5", name: "DPS Geral", description: "Etiqueta para Dispositivo de Proteção contra Surtos geral." },
 ];
 
-export default function AdminTemplatesPage() {
-  const { toast } = useToast(); // Initialized toast
+const labelTemplateSchema = z.object({
+  name: z.string().min(3, "Nome do template deve ter no mínimo 3 caracteres."),
+  description: z.string().min(5, "Descrição deve ter no mínimo 5 caracteres."),
+});
 
-  const handleAddNewLabelTemplate = () => {
-    toast({
-      title: "Em Desenvolvimento",
-      description: "A funcionalidade para adicionar novos templates de etiqueta está em desenvolvimento.",
-    });
+type LabelTemplateFormData = z.infer<typeof labelTemplateSchema>;
+
+export default function AdminTemplatesPage() {
+  const { toast } = useToast();
+  const [isLabelDialogFormOpen, setIsLabelDialogFormOpen] = useState(false);
+  const [editingLabelTemplate, setEditingLabelTemplate] = useState<GlobalLabelTemplate | null>(null); // For future edit
+  const [formSubmitting, setFormSubmitting] = useState(false);
+
+  const { control, handleSubmit, reset, formState: { errors } } = useForm<LabelTemplateFormData>({
+    resolver: zodResolver(labelTemplateSchema),
+    defaultValues: { name: "", description: "" },
+  });
+
+  const openNewLabelTemplateForm = () => {
+    setEditingLabelTemplate(null);
+    reset({ name: "", description: "" });
+    setIsLabelDialogFormOpen(true);
   };
+
+  const onLabelTemplateSubmit = async (data: LabelTemplateFormData) => {
+    setFormSubmitting(true);
+    // TODO: Implement actual saving to Firestore
+    console.log("Submitting new label template:", data);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+    
+    toast({
+      title: editingLabelTemplate ? "Template de Etiqueta Atualizado!" : "Novo Template de Etiqueta Adicionado!",
+      description: `O template "${data.name}" foi salvo com sucesso (simulação).`,
+    });
+    
+    setIsLabelDialogFormOpen(false);
+    setFormSubmitting(false);
+    // TODO: Refetch templates list after saving
+  };
+
 
   return (
     <div className="space-y-6">
@@ -49,7 +97,7 @@ export default function AdminTemplatesPage() {
             <p className="text-muted-foreground mb-4">
               Gerencie os modelos de etiquetas padrão disponíveis para todos os usuários da plataforma.
             </p>
-            <Button onClick={handleAddNewLabelTemplate} className="mb-4"> {/* Removed disabled, added onClick */}
+            <Button onClick={openNewLabelTemplateForm} className="mb-4">
               <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Template de Etiqueta
             </Button>
             
@@ -97,7 +145,7 @@ export default function AdminTemplatesPage() {
             <p className="text-muted-foreground mb-4">
               Gerencie os modelos de fichas técnicas padrão disponíveis para todos os usuários.
             </p>
-            <Button disabled className="mb-4"> {/* This one remains disabled for now */}
+            <Button disabled className="mb-4">
                 <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Template de Ficha
             </Button>
              {/* Placeholder for list of sheet templates */}
@@ -107,6 +155,48 @@ export default function AdminTemplatesPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog for Adding/Editing Label Template */}
+      <Dialog open={isLabelDialogFormOpen} onOpenChange={(open) => { setIsLabelDialogFormOpen(open); if(!open) setEditingLabelTemplate(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingLabelTemplate ? "Editar Template de Etiqueta" : "Novo Template de Etiqueta"}</DialogTitle>
+            <DialogDescription>
+              {editingLabelTemplate ? "Atualize os dados do template." : "Preencha os dados para cadastrar um novo template de etiqueta global."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onLabelTemplateSubmit)} className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="name">Nome do Template</Label>
+              <Controller
+                name="name"
+                control={control}
+                render={({ field }) => <Input id="name" {...field} placeholder="Ex: Iluminação Cozinha (Residencial)" />}
+              />
+              {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
+            </div>
+            <div>
+              <Label htmlFor="description">Descrição Curta</Label>
+              <Controller
+                name="description"
+                control={control}
+                render={({ field }) => <Textarea id="description" {...field} placeholder="Uma breve descrição do propósito do template." rows={3} />}
+              />
+              {errors.description && <p className="text-sm text-destructive mt-1">{errors.description.message}</p>}
+            </div>
+            {/* Future fields: icon selection, default circuit type, etc. */}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancelar</Button>
+              </DialogClose>
+              <Button type="submit" disabled={formSubmitting}>
+                {formSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingLabelTemplate ? "Salvar Alterações" : "Adicionar Template")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
