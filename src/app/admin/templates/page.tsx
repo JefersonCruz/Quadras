@@ -24,6 +24,17 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +44,7 @@ import { z } from "zod";
 import type { GlobalLabelTemplate } from "@/types/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/contexts/AuthContext";
-import { collection, addDoc, Timestamp, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, addDoc, Timestamp, getDocs, query, orderBy, doc, deleteDoc } from "firebase/firestore";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -53,6 +64,11 @@ export default function AdminTemplatesPage() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [labelTemplates, setLabelTemplates] = useState<GlobalLabelTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<GlobalLabelTemplate | null>(null);
+  const [deletingTemplate, setDeletingTemplate] = useState(false);
+
 
   const { control, handleSubmit, reset, formState: { errors } } = useForm<LabelTemplateFormData>({
     resolver: zodResolver(labelTemplateSchema),
@@ -123,7 +139,7 @@ export default function AdminTemplatesPage() {
       });
       
       setIsLabelDialogFormOpen(false);
-      fetchLabelTemplates(); // Refetch templates to update the list
+      fetchLabelTemplates(); 
     } catch (error) {
       console.error("Error saving label template:", error);
       toast({
@@ -133,6 +149,42 @@ export default function AdminTemplatesPage() {
       });
     } finally {
       setFormSubmitting(false);
+    }
+  };
+
+  const openDeleteConfirmationDialog = (template: GlobalLabelTemplate) => {
+    setTemplateToDelete(template);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteLabelTemplate = async () => {
+    if (!templateToDelete || !templateToDelete.id || !isAdmin) {
+      toast({
+        title: "Erro",
+        description: "Template não selecionado ou permissão negada.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setDeletingTemplate(true);
+    try {
+      await deleteDoc(doc(db, "globalLabelTemplates", templateToDelete.id));
+      toast({
+        title: "Template Excluído!",
+        description: `O template "${templateToDelete.name}" foi removido com sucesso.`,
+      });
+      fetchLabelTemplates();
+      setIsDeleteDialogOpen(false);
+      setTemplateToDelete(null);
+    } catch (error) {
+      console.error("Error deleting label template:", error);
+      toast({
+        title: "Erro ao Excluir",
+        description: "Não foi possível remover o template.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingTemplate(false);
     }
   };
 
@@ -184,8 +236,14 @@ export default function AdminTemplatesPage() {
                           <Button variant="outline" size="sm" disabled>
                             <Edit className="h-3 w-3 mr-1" /> Editar
                           </Button>
-                          <Button variant="destructive" size="sm" disabled>
-                            <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            onClick={() => openDeleteConfirmationDialog(template)}
+                            disabled={deletingTemplate && templateToDelete?.id === template.id}
+                          >
+                            {deletingTemplate && templateToDelete?.id === template.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin"/> : <Trash2 className="h-3 w-3 mr-1" />} 
+                            Excluir
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -212,7 +270,6 @@ export default function AdminTemplatesPage() {
             <Button disabled className="mb-4">
                 <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Template de Ficha
             </Button>
-             {/* Placeholder for list of sheet templates */}
             <div className="mt-4 p-4 border rounded-md bg-muted/50 min-h-[100px] flex items-center justify-center">
                 <p className="text-muted-foreground">Lista de templates de fichas técnicas (em breve).</p>
             </div>
@@ -220,7 +277,6 @@ export default function AdminTemplatesPage() {
         </Card>
       </div>
 
-      {/* Dialog for Adding/Editing Label Template */}
       <Dialog open={isLabelDialogFormOpen} onOpenChange={(open) => { setIsLabelDialogFormOpen(open); if(!open) setEditingLabelTemplate(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -248,7 +304,6 @@ export default function AdminTemplatesPage() {
               />
               {errors.description && <p className="text-sm text-destructive mt-1">{errors.description.message}</p>}
             </div>
-            {/* Future fields: icon selection, default circuit type, etc. */}
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
@@ -261,7 +316,24 @@ export default function AdminTemplatesPage() {
         </DialogContent>
       </Dialog>
 
-    </div>
-  );
-}
+      {templateToDelete && (
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir o template "{templateToDelete.name}"? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setTemplateToDelete(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteLabelTemplate} disabled={deletingTemplate}>
+                {deletingTemplate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
+    </div>
