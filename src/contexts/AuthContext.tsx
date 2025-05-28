@@ -9,12 +9,14 @@ import { doc, getDoc } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
 import type { Usuario } from "@/types/firestore";
 import { Loader2 } from "lucide-react";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebarSkeleton } from "@/components/layout/AppSidebarSkeleton";
 
 interface AuthContextType {
   user: FirebaseUser | null;
   userData: Usuario | null;
   isAdmin: boolean;
-  loading: boolean; // This will represent whether auth is still being resolved
+  loading: boolean;
   db: Firestore;
 }
 
@@ -43,7 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setAuthResolved(true);
         }
       }
-    }, 15000);
+    }, 15000); // 15 seconds timeout
 
     let unsubscribe: (() => void) | undefined;
 
@@ -51,33 +53,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("[AuthContext] Setting up onAuthStateChanged listener.");
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         console.log("[AuthContext] onAuthStateChanged triggered. firebaseUser:", firebaseUser ? firebaseUser.uid : null);
-        if (didUnsubscribe) {
-          console.log("[AuthContext] onAuthStateChanged: Component unmounted, aborting state updates.");
-          return;
-        }
-
+        
         try {
           if (firebaseUser) {
-            setUser(firebaseUser);
+            if (!didUnsubscribe) setUser(firebaseUser);
             const userDocRef = doc(db, "usuarios", firebaseUser.uid);
             const userDocSnap = await getDoc(userDocRef);
 
             if (userDocSnap.exists()) {
               const appUserData = userDocSnap.data() as Usuario;
-              setUserData(appUserData);
-              setIsAdmin(appUserData.role === "admin");
+              if (!didUnsubscribe) setUserData(appUserData);
+              if (!didUnsubscribe) setIsAdmin(appUserData.role === "admin");
               console.log("[AuthContext] User data found:", appUserData);
             } else {
               console.warn(
                 `[AuthContext] User document ${firebaseUser.uid} not found in Firestore.`
               );
-              setUserData(null);
-              setIsAdmin(false);
+              if (!didUnsubscribe) setUserData(null);
+              if (!didUnsubscribe) setIsAdmin(false);
             }
           } else {
-            setUser(null);
-            setUserData(null);
-            setIsAdmin(false);
+            if (!didUnsubscribe) setUser(null);
+            if (!didUnsubscribe) setUserData(null);
+            if (!didUnsubscribe) setIsAdmin(false);
             console.log("[AuthContext] No firebaseUser, user set to null.");
           }
         } catch (error: any) {
@@ -126,7 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       clearTimeout(loadingTimeout);
       console.log("[AuthContext] Cleared loadingTimeout.");
     };
-  }, []);
+  }, []); // Empty dependency array: run once on mount, cleanup on unmount
 
   if (!authResolved) {
     return (
