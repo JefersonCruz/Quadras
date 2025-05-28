@@ -187,4 +187,6 @@ export interface GlobalLabelTemplate {
   description: string;
   createdBy?: string; // Admin UID
   createdAt?: Timestamp;
+  updatedBy?: string; // Admin UID
+  updatedAt?: Timestamp;
 }

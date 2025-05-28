@@ -33,7 +33,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,7 +43,7 @@ import { z } from "zod";
 import type { GlobalLabelTemplate } from "@/types/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/contexts/AuthContext";
-import { collection, addDoc, Timestamp, getDocs, query, orderBy, doc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, Timestamp, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from "firebase/firestore";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -111,6 +110,13 @@ export default function AdminTemplatesPage() {
     setIsLabelDialogFormOpen(true);
   };
 
+  const openEditLabelTemplateForm = (template: GlobalLabelTemplate) => {
+    setEditingLabelTemplate(template);
+    reset({ name: template.name, description: template.description });
+    setIsLabelDialogFormOpen(true);
+  };
+
+
   const onLabelTemplateSubmit = async (data: LabelTemplateFormData) => {
     if (!user || !user.uid || !isAdmin) {
       toast({
@@ -124,21 +130,37 @@ export default function AdminTemplatesPage() {
 
     setFormSubmitting(true);
     try {
-      const newTemplateData: Omit<GlobalLabelTemplate, 'id'> = {
-        name: data.name,
-        description: data.description,
-        createdBy: user.uid,
-        createdAt: Timestamp.now(),
-      };
-      
-      await addDoc(collection(db, "globalLabelTemplates"), newTemplateData);
-      
-      toast({
-        title: editingLabelTemplate ? "Template de Etiqueta Atualizado!" : "Novo Template de Etiqueta Adicionado!",
-        description: `O template "${data.name}" foi salvo com sucesso.`,
-      });
+      if (editingLabelTemplate && editingLabelTemplate.id) {
+        // Update existing template
+        const templateRef = doc(db, "globalLabelTemplates", editingLabelTemplate.id);
+        await updateDoc(templateRef, {
+          name: data.name,
+          description: data.description,
+          updatedBy: user.uid,
+          updatedAt: Timestamp.now(),
+        });
+        toast({
+          title: "Template de Etiqueta Atualizado!",
+          description: `O template "${data.name}" foi atualizado com sucesso.`,
+        });
+
+      } else {
+        // Add new template
+        const newTemplateData: Omit<GlobalLabelTemplate, 'id'> = {
+          name: data.name,
+          description: data.description,
+          createdBy: user.uid,
+          createdAt: Timestamp.now(),
+        };
+        await addDoc(collection(db, "globalLabelTemplates"), newTemplateData);
+        toast({
+          title: "Novo Template de Etiqueta Adicionado!",
+          description: `O template "${data.name}" foi salvo com sucesso.`,
+        });
+      }
       
       setIsLabelDialogFormOpen(false);
+      setEditingLabelTemplate(null);
       fetchLabelTemplates(); 
     } catch (error) {
       console.error("Error saving label template:", error);
@@ -188,6 +210,11 @@ export default function AdminTemplatesPage() {
     }
   };
 
+  const formatTimestamp = (timestamp?: Timestamp) => {
+    if (!timestamp) return 'N/A';
+    return format(timestamp.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+  };
+
 
   return (
     <div className="space-y-6">
@@ -220,7 +247,7 @@ export default function AdminTemplatesPage() {
                     <TableRow>
                       <TableHead>Nome do Template</TableHead>
                       <TableHead>Descrição</TableHead>
-                      <TableHead>Criado Em</TableHead>
+                      <TableHead>Data</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -228,12 +255,12 @@ export default function AdminTemplatesPage() {
                     {labelTemplates.map((template) => (
                       <TableRow key={template.id}>
                         <TableCell className="font-medium">{template.name}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{template.description}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-xs truncate" title={template.description}>{template.description}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {template.createdAt ? format(template.createdAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'N/A'}
+                           {formatTimestamp(template.updatedAt || template.createdAt)}
                         </TableCell>
                         <TableCell className="text-right space-x-2">
-                          <Button variant="outline" size="sm" disabled>
+                          <Button variant="outline" size="sm" onClick={() => openEditLabelTemplateForm(template)}>
                             <Edit className="h-3 w-3 mr-1" /> Editar
                           </Button>
                           <Button 
@@ -306,7 +333,7 @@ export default function AdminTemplatesPage() {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button type="button" variant="outline">Cancelar</Button>
+                <Button type="button" variant="outline" onClick={() => { setIsLabelDialogFormOpen(false); setEditingLabelTemplate(null); }}>Cancelar</Button>
               </DialogClose>
               <Button type="submit" disabled={formSubmitting}>
                 {formSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingLabelTemplate ? "Salvar Alterações" : "Adicionar Template")}
@@ -337,3 +364,5 @@ export default function AdminTemplatesPage() {
       )}
 
     </div>
+  );
+}
