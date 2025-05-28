@@ -3,10 +3,10 @@ import { onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import next from "next";
 import admin from "firebase-admin";
-// import ots from "opentimestamps"; // Temporarily commented out
-// import { Buffer } from "buffer"; // Temporarily commented out if only used by ots
+// import ots from "opentimestamps"; // Commented out
+// import { Buffer } from "buffer"; // Commented out
 
-// Inicializar Firebase Admin SDK apenas uma vez
+// Initialize Firebase Admin SDK only once
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
@@ -15,7 +15,7 @@ const db = admin.firestore();
 const REGION = "us-central1";
 const IS_DEV = process.env.NODE_ENV !== "production";
 
-// Garante que o caminho .next esteja correto
+// Ensures the .next path is correct
 const app = next({
   dev: IS_DEV,
   conf: { distDir: ".next" },
@@ -27,8 +27,8 @@ export const nextApp = onRequest({ region: REGION }, async (req, res) => {
   logger.info("NextApp Request URL:", req.originalUrl);
 
   try {
-    await app.prepare(); // prepara o app Next.js
-    return handle(req, res); // delega o request para o Next
+    await app.prepare(); // prepares the Next.js app
+    return handle(req, res); // delegates the request to Next
   } catch (err) {
     logger.error("❌ Erro no Next.js:", err, { stack: err.stack });
     if (!res.headersSent) {
@@ -37,11 +37,10 @@ export const nextApp = onRequest({ region: REGION }, async (req, res) => {
   }
 });
 
-// Firestore trigger para registrar assinatura na blockchain
-// import { onDocumentWritten } from "firebase-functions/v2/firestore";
+// Firestore trigger for blockchain signature registration
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 
-/*
-// Temporarily commented out registrarAssinaturaNaBlockchain
+/* // Commenting out the entire function as it depends on opentimestamps
 export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{contratoId}", async (event) => {
     const contratoId = event.params.contratoId;
     logger.info(`[registrarAssinaturaNaBlockchain] Triggered for contratoId: ${contratoId}`);
@@ -49,7 +48,7 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
     const beforeData = event.data?.before?.data();
     const afterData = event.data?.after?.data();
 
-    // Verificar se o documento foi excluído (afterData não existirá)
+    // Check if the document was deleted (afterData will not exist)
     if (!afterData) {
       logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} foi excluído. Nenhuma ação de timestamp.`);
       return null;
@@ -60,11 +59,11 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
 
     logger.info(`[registrarAssinaturaNaBlockchain] Status before: ${statusAntes}, Status after: ${statusDepois} for ${contratoId}`);
 
-    // Só processar se o status mudou para 'assinado'
+    // Only process if the status changed to 'assinado' and was not 'assinado' before
     if (statusDepois !== 'assinado' || statusAntes === 'assinado') {
       if (statusDepois !== 'assinado') {
         logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} não está com status 'assinado' (status atual: ${statusDepois}). Nenhuma ação de timestamp.`);
-      } else { // statusAntes era 'assinado' e statusDepois também é 'assinado'
+      } else { // statusAntes was 'assinado' and statusDepois is also 'assinado'
         logger.info(`[registrarAssinaturaNaBlockchain] Status do contrato ${contratoId} já era 'assinado' e permaneceu 'assinado'. Nenhuma nova ação de timestamp.`);
       }
       return null;
@@ -72,10 +71,10 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
 
     logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} mudou para status 'assinado'. Iniciando processo de registro na blockchain via OpenTimestamps.`);
 
-    // Gera o hash do contrato inteiro após todas as assinaturas
+    // Generate the hash of the entire contract after all signatures
     const contratoJson = JSON.stringify(afterData);
     
-    // A biblioteca opentimestamps espera um Uint8Array para fromBytes
+    // opentimestamps library expects a Uint8Array for fromBytes
     const contratoBuffer = Buffer.from(contratoJson, 'utf8');
     const digest = ots.DetachedTimestampFile.fromBytes(
       new Uint8Array(contratoBuffer),
@@ -96,7 +95,7 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
         hashTipo: "sha256",
         timestampFileBase64: timestampBase64,
         registradoEm: admin.firestore.FieldValue.serverTimestamp(),
-        dadosContratoSnapshot: contratoJson, // Snapshot do contrato no momento do timestamp
+        dadosContratoSnapshot: contratoJson, // Snapshot of the contract at the time of timestamping
       };
 
       await db
@@ -109,7 +108,7 @@ export const registrarAssinaturaNaBlockchain = onDocumentWritten("contratos/{con
       logger.info(`[registrarAssinaturaNaBlockchain] Contrato ${contratoId} registrado na blockchain via OpenTimestamps com sucesso. Prova salva em subcoleção.`);
     } catch (error) {
       logger.error(`[registrarAssinaturaNaBlockchain] Erro ao registrar contrato ${contratoId} com OpenTimestamps ou salvar prova:`, error, { stack: error.stack });
-      // Você pode querer adicionar uma lógica para tentar novamente ou notificar o admin
+      // You might want to add logic to retry or notify the admin
       // Ex: await db.collection("errosRegistrosBlockchain").add({ contratoId, erro: error.message, timestamp: admin.firestore.FieldValue.serverTimestamp() });
     }
 
