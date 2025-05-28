@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Loader2, FilePlus2, DollarSign } from "lucide-react";
+import { CalendarIcon, Loader2, FilePlus2, DollarSign } from "lucide-react"; // Added DollarSign
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
 import type { Orcamento, Cliente, Projeto, Empresa } from "@/types/firestore";
@@ -41,7 +41,7 @@ export default function NewQuotePage() {
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
+  const [formSubmitting, setFormSubmitting] = useState(false); // Renamed from loading to formSubmitting
   const [clients, setClients] = useState<Cliente[]>([]);
   const [projects, setProjects] = useState<Projeto[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Projeto[]>([]);
@@ -111,7 +111,7 @@ export default function NewQuotePage() {
       toast({ title: "Usuário não autenticado", variant: "destructive" });
       return;
     }
-    setLoading(true);
+    setFormSubmitting(true);
 
     const newQuoteData: Omit<Orcamento, 'id'> = {
       createdBy: user.uid,
@@ -145,7 +145,7 @@ export default function NewQuotePage() {
       console.error("Erro ao criar orçamento:", error);
       toast({ title: "Erro ao Criar Orçamento", description: "Não foi possível salvar o orçamento.", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setFormSubmitting(false);
     }
   };
   
@@ -207,8 +207,10 @@ export default function NewQuotePage() {
                     name="clienteId"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger id="clienteId"><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={clients.length === 0}>
+                        <SelectTrigger id="clienteId">
+                          <SelectValue placeholder={clients.length === 0 ? "Nenhum cliente cadastrado" : "Selecione um cliente"} />
+                        </SelectTrigger>
                         <SelectContent>
                           {clients.map(client => <SelectItem key={client.id} value={client.id!}>{client.nome}</SelectItem>)}
                         </SelectContent>
@@ -224,7 +226,9 @@ export default function NewQuotePage() {
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClientId || filteredProjects.length === 0}>
-                        <SelectTrigger id="projetoId"><SelectValue placeholder={!selectedClientId ? "Selecione um cliente primeiro" : (filteredProjects.length === 0 ? "Nenhum projeto para este cliente" : "Selecione um projeto")} /></SelectTrigger>
+                        <SelectTrigger id="projetoId">
+                          <SelectValue placeholder={!selectedClientId ? "Selecione um cliente primeiro" : (filteredProjects.length === 0 ? "Nenhum projeto para este cliente" : "Selecione um projeto")} />
+                        </SelectTrigger>
                         <SelectContent>
                           {filteredProjects.map(project => <SelectItem key={project.id} value={project.id!}>{project.nome}</SelectItem>)}
                         </SelectContent>
@@ -253,10 +257,9 @@ export default function NewQuotePage() {
                   </div>
                   {errors.valorTotalEstimado && <p className="text-sm text-destructive mt-1">{errors.valorTotalEstimado.message}</p>}
                 </div>
-                 {/* Placeholder for itemized list - future enhancement */}
-                <div className="p-4 border-dashed border rounded-md bg-muted/50">
+                <div className="p-4 border-2 border-dashed border-border rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center">
                   <p className="text-sm text-muted-foreground text-center">
-                    Em breve: Adicionar itens detalhados ao orçamento (quantidade, valor unitário, etc.).
+                    Em breve: Adicionar itens detalhados ao orçamento (materiais, mão de obra, quantidade, valor unitário, etc.).
                   </p>
                 </div>
               </CardContent>
@@ -269,7 +272,7 @@ export default function NewQuotePage() {
               <CardContent>
                 <div>
                   <Label htmlFor="observacoes">Observações (Opcional)</Label>
-                  <Controller name="observacoes" control={control} render={({ field }) => <Textarea id="observacoes" {...field} rows={3} placeholder="Condições de pagamento, informações sobre garantia, etc." />} />
+                  <Controller name="observacoes" control={control} render={({ field }) => <Textarea id="observacoes" {...field} rows={3} placeholder="Condições de pagamento, informações sobre garantia, validade da proposta, etc." />} />
                 </div>
               </CardContent>
             </Card>
@@ -281,15 +284,15 @@ export default function NewQuotePage() {
                 <CardTitle>Ações</CardTitle>
               </CardHeader>
               <CardContent>
-                <Button type="submit" className="w-full" disabled={loading || loadingData}>
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Salvar Orçamento
+                <Button type="submit" className="w-full" disabled={formSubmitting || loadingData}>
+                  {formSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Salvar Orçamento
                 </Button>
               </CardContent>
             </Card>
              <Card>
-                <CardHeader><CardTitle>Pré-visualização (Em breve)</CardTitle></CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-2 p-6 border border-dashed rounded-md min-h-[200px] flex items-center justify-center">
-                    <p className="text-center">A pré-visualização do orçamento em PDF aparecerá aqui.</p>
+                <CardHeader><CardTitle>Pré-visualização do PDF (Em breve)</CardTitle></CardHeader>
+                <CardContent className="text-sm text-muted-foreground space-y-2 p-6 border-2 border-dashed border-border rounded-md min-h-[200px] flex items-center justify-center bg-muted/30">
+                    <p className="text-center">A pré-visualização do orçamento em formato PDF aparecerá aqui assim que a funcionalidade estiver implementada.</p>
                 </CardContent>
             </Card>
           </div>
@@ -298,3 +301,5 @@ export default function NewQuotePage() {
     </div>
   );
 }
+
+    
