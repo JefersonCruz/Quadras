@@ -1,65 +1,64 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if the user is an administrator
+    // Função auxiliar para verificar se o usuário é um administrador
     function isAdmin() {
       return request.auth != null &&
              exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Users collection
+    // Coleção de Usuários
     match /usuarios/{userId} {
       allow read: if request.auth.uid == userId || isAdmin();
-      // User can create their own document if the document ID matches their UID
+      // Permite que o usuário crie seu próprio documento se o ID do documento corresponder ao seu UID
       allow create: if request.auth.uid == userId && request.resource.id == userId;
-      // User can update their own data, or an admin can update any user
+      // Permite que o usuário atualize seus próprios dados, ou um admin pode atualizar qualquer usuário
       allow update: if request.auth.uid == userId || isAdmin();
-      // Deletion of user documents is typically restricted or handled by admin/specific functions
-      // Example: allow delete: if isAdmin();
+      // A exclusão de documentos de usuário geralmente é restrita ou tratada por admin/funções específicas
+      // Exemplo: allow delete: if isAdmin();
     }
 
-    // Clients collection
-    // Assumes 'clientes' has an 'owner' field with the user's UID
+    // Coleção de Clientes
+    // Assume que 'clientes' tem um campo 'owner' com o UID do usuário
     match /clientes/{clienteId} {
       allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.owner || isAdmin());
       allow create: if request.auth != null && (request.auth.uid == request.resource.data.owner || isAdmin());
     }
 
-    // Projects collection
-    // Assumes 'projetos' has an 'owner' field with the user's UID
+    // Coleção de Projetos
+    // Assume que 'projetos' tem um campo 'owner' com o UID do usuário
     match /projetos/{projetoId} {
       allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.owner || isAdmin());
       allow create: if request.auth != null && (request.auth.uid == request.resource.data.owner || isAdmin());
     }
 
-    // Technical Sheets collection
-    // Assumes 'fichasTecnicas' has an 'owner' field with the user's UID
+    // Coleção de Fichas Técnicas
+    // Assume que 'fichasTecnicas' tem um campo 'owner' com o UID do usuário
     match /fichasTecnicas/{fichaId} {
       allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.owner || isAdmin());
       allow create: if request.auth != null && (request.auth.uid == request.resource.data.owner || isAdmin());
     }
 
-    // Companies collection
-    // Assumes the document ID in 'empresas' is the owner's UID
+    // Coleção de Empresas
+    // Assume que o ID do documento na coleção 'empresas' é o UID do proprietário
     match /empresas/{empresaOwnerId} {
       allow read, update, delete: if request.auth != null && (request.auth.uid == empresaOwnerId || isAdmin());
       allow create: if request.auth != null && (request.auth.uid == empresaOwnerId && request.resource.id == empresaOwnerId || isAdmin());
     }
 
-    // Labels collection
-    // Assumes 'etiquetas' has a 'createdBy' field with the user's UID
+    // Coleção de Etiquetas
+    // Assume que 'etiquetas' tem um campo 'createdBy' com o UID do usuário
     match /etiquetas/{etiquetaId} {
       allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.createdBy || isAdmin());
       allow create: if request.auth != null && (request.auth.uid == request.resource.data.createdBy || isAdmin());
     }
 
-    // Contracts collection
+    // Coleção de Contratos
     match /contratos/{contractId} {
-      // --- Helpers for contract data and request data ---
+      // --- Helpers para dados do contrato e da requisição ---
       function contractResource() {
         return resource.data;
       }
@@ -67,11 +66,12 @@ service cloud.firestore {
         return request.resource.data;
       }
       function authedUserEmail() {
+        // Verifica se request.auth e request.auth.token existem antes de acessar o email
         return request.auth != null && request.auth.token != null ? request.auth.token.email : null;
       }
 
-      // --- READ (GET) PERMISSIONS ---
-      // Creator, Admin can read. Client and Witnesses can read if their authenticated email matches.
+      // --- PERMISSÕES DE LEITURA (GET) ---
+      // Criador, Admin podem ler. Cliente e Testemunhas podem ler se o email autenticado corresponder.
       allow get: if request.auth != null && (
                     request.auth.uid == contractResource().createdBy ||
                     isAdmin() ||
@@ -80,78 +80,76 @@ service cloud.firestore {
                     (contractResource().testemunhas != null && contractResource().testemunhas[1] != null && authedUserEmail() == contractResource().testemunhas[1].email)
                   );
 
-      // --- CREATE PERMISSIONS ---
-      // Only the creator (service provider) or an admin can create.
+      // --- PERMISSÕES DE CRIAÇÃO (CREATE) ---
+      // Somente o criador (prestador) ou admin podem criar.
       allow create: if request.auth != null &&
                      (request.auth.uid == incomingContractData().createdBy || isAdmin());
 
-      // --- DELETE PERMISSIONS ---
+      // --- PERMISSÕES DE EXCLUSÃO (DELETE) ---
       allow delete: if request.auth != null &&
                       (request.auth.uid == contractResource().createdBy || isAdmin());
 
-      // --- UPDATE PERMISSIONS ---
+      // --- PERMISSÕES DE ATUALIZAÇÃO (UPDATE) ---
       allow update: if request.auth != null && (
-                      // RULE 1: Creator/Admin can update general fields (but not directly overwrite signatures meant for others)
+                      // REGRA 1: Criador/Admin pode atualizar campos gerais (exceto sobrescrever assinaturas de outros)
                       (
                         (request.auth.uid == contractResource().createdBy || isAdmin()) &&
-                        // List of signature fields that creator/admin CANNOT directly overwrite
+                        // Lista de campos que NÃO podem ser sobrescritos diretamente pelo criador/admin (são definidos pelos signatários)
                         !( incomingContractData().diff(contractResource()).affectedKeys().hasAny([
                             'assinaturas.cliente', 'assinaturas.testemunha1', 'assinaturas.testemunha2', 'assinaturas.prestador'
                            ])
                         )
                       ) ||
-                      // RULE 2: A signer (client, witness, provider) can update their own signature slot
-                      // and related status fields.
+                      // REGRA 2: Um signatário (cliente, testemunha, prestador) pode atualizar seu próprio slot de assinatura
+                      // e os campos de status relacionados.
                       (
-                        // List of fields a signer IS ALLOWED to modify on the contract document:
-                        // 'assinaturas' (only their own slot), 'status', 'dataUltimaModificacao', 'dataFinalizacaoAssinaturas'
-                        keys(incomingContractData().diff(contractResource()).affectedKeys()).hasOnly(['assinaturas', 'status', 'dataUltimaModificacao', 'dataFinalizacaoAssinaturas']) &&
-                        // Validate that the status transition is to a valid "signed" state
+                        // Lista de campos que um signatário PODE modificar no documento do contrato:
+                        // 'assinaturas' (o seu próprio slot), 'status', 'dataUltimaModificacao', 'dataFinalizacaoAssinaturas'
+                        incomingContractData().diff(contractResource()).affectedKeys().hasOnly(['assinaturas', 'status', 'dataUltimaModificacao', 'dataFinalizacaoAssinaturas']) &&
+                        // Verifica se o status está em uma transição válida
                         (incomingContractData().status == 'parcialmente_assinado' || incomingContractData().status == 'assinado') &&
                         (
-                          // Client signing
+                          // Cliente assinando
                           ( contractResource().cliente != null && authedUserEmail() == contractResource().cliente.email &&
                             incomingContractData().assinaturas.cliente.dataHora == request.time &&
                             incomingContractData().assinaturas.cliente.nome == contractResource().cliente.nome &&
-                            // Ensure only the client's signature field is being changed within 'assinaturas' map
-                            (contractResource().assinaturas == null || keys(incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys()).hasOnly(['cliente'])) &&
-                            (contractResource().assinaturas != null || keys(incomingContractData().assinaturas).hasOnly(['cliente'])) // Handles first signature in the map
+                            // Verifica se apenas o campo 'cliente' está sendo alterado dentro de 'assinaturas'
+                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['cliente'])) ||
+                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['cliente'])) )
                           ) ||
-                          // Witness 1 signing
+                          // Testemunha 1 assinando
                           ( contractResource().testemunhas != null && contractResource().testemunhas[0] != null && authedUserEmail() == contractResource().testemunhas[0].email &&
                             incomingContractData().assinaturas.testemunha1.dataHora == request.time &&
                             incomingContractData().assinaturas.testemunha1.nome == contractResource().testemunhas[0].nome &&
-                            (contractResource().assinaturas == null || keys(incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys()).hasOnly(['testemunha1'])) &&
-                            (contractResource().assinaturas != null || keys(incomingContractData().assinaturas).hasOnly(['testemunha1']))
+                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['testemunha1'])) ||
+                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha1'])) )
                           ) ||
-                          // Witness 2 signing
+                          // Testemunha 2 assinando
                           ( contractResource().testemunhas != null && contractResource().testemunhas[1] != null && authedUserEmail() == contractResource().testemunhas[1].email &&
                             incomingContractData().assinaturas.testemunha2.dataHora == request.time &&
                             incomingContractData().assinaturas.testemunha2.nome == contractResource().testemunhas[1].nome &&
-                            (contractResource().assinaturas == null || keys(incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys()).hasOnly(['testemunha2'])) &&
-                            (contractResource().assinaturas != null || keys(incomingContractData().assinaturas).hasOnly(['testemunha2']))
+                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['testemunha2'])) ||
+                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha2'])) )
                           ) ||
-                          // Provider (creator) signing through this public flow
-                          ( request.auth.uid == contractResource().createdBy && contractResource().empresaPrestador != null &&
+                          // Prestador (criador) assinando via este fluxo
+                          ( request.auth.uid == contractResource().createdBy && contractResource().empresaPrestador != null && 
                             incomingContractData().assinaturas.prestador.dataHora == request.time &&
                             incomingContractData().assinaturas.prestador.nome == contractResource().empresaPrestador.responsavelTecnico &&
-                            (contractResource().assinaturas == null || keys(incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys()).hasOnly(['prestador'])) &&
-                            (contractResource().assinaturas != null || keys(incomingContractData().assinaturas).hasOnly(['prestador']))
+                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['prestador'])) ||
+                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['prestador'])) )
                           )
                         )
                       )
                     );
-    } // End of match /contratos/{contractId}
+    } // Fim do match /contratos/{contractId}
 
-    // Global Label Templates
-    match /globalLabelTemplates/{templateId} {
-      // Allow any authenticated user to read global templates
-      allow read: if request.auth != null;
-      // Only allow admins to create, update, or delete global templates
-      allow write: if isAdmin();
+    // Templates Globais (exemplo, não usado atualmente mas bom para estrutura)
+    match /globalTemplates/{templateId} {
+      allow read: if request.auth != null; // Todos os usuários autenticados podem ler
+      allow write: if isAdmin();           // Apenas admins podem escrever
     }
 
-  } // End of match /databases/{database}/documents
-} // End of service cloud.firestore
+  } // Fim do match /databases/{database}/documents
+} // Fim do service cloud.firestore
 
     
