@@ -20,7 +20,8 @@ import {
   LayoutGrid,
   Sparkles,
   NotebookText,
-  FileSignature, // Added for Contracts
+  FileSignature,
+  Calculator, // Added for Orçamentos
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
@@ -74,9 +75,10 @@ export function AppSidebar() {
     { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
     { href: "/dashboard/clients", label: "Clientes", icon: Users },
     { href: "/dashboard/projects", label: "Projetos", icon: Briefcase },
+    { href: "/dashboard/quotes", label: "Orçamentos", icon: Calculator }, // New Quotes Link
     { href: "/dashboard/labels", label: "Etiquetas", icon: Tag },
     { href: "/dashboard/technical-sheets", label: "Fichas Técnicas", icon: NotebookText },
-    { href: "/dashboard/contracts", label: "Contratos", icon: FileSignature }, // New Contract Link
+    { href: "/dashboard/contracts", label: "Contratos", icon: FileSignature },
     { href: "/dashboard/smart-suggestions", label: "Sugestões IA", icon: Sparkles },
     { href: "/dashboard/company", label: "Minha Empresa", icon: Building },
   ];

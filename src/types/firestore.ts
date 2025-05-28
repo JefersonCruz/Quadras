@@ -190,3 +190,35 @@ export interface GlobalLabelTemplate {
   updatedBy?: string; // Admin UID
   updatedAt?: Timestamp;
 }
+
+// --- Orçamentos (Quotes/Estimates) Types ---
+export interface OrcamentoItem {
+  id?: string; // Could be useful if items are stored separately later
+  descricao: string;
+  quantidade: number;
+  unidadeMedida: string; // Ex: 'un', 'm²', 'h'
+  precoUnitario: number;
+  precoTotal: number; // quantidade * precoUnitario
+}
+
+export interface Orcamento {
+  id?: string;
+  createdBy: string; // UID of the user who created it
+  clienteId: string;
+  projetoId?: string; // Optional link to an existing project
+  numeroOrcamento: string; // E.g., "ORC-2024-001" - User input for now
+  dataCriacao: Timestamp;
+  dataValidade: Timestamp;
+  descricaoServicos: string; // General description of services/scope
+  // itens?: OrcamentoItem[]; // For detailed line items - future enhancement
+  valorTotalEstimado: number;
+  status: 'rascunho' | 'enviado' | 'aprovado' | 'rejeitado' | 'convertido_os';
+  observacoes?: string; // Optional notes
+  // Campos da empresa que emitiu o orçamento (para o PDF)
+  empresaNome?: string;
+  empresaCnpj?: string;
+  empresaEndereco?: string;
+  empresaTelefone?: string;
+  empresaEmail?: string;
+  empresaLogotipoUrl?: string;
+}
