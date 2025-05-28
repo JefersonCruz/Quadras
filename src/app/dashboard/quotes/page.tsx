@@ -133,11 +133,16 @@ export default function QuotesPage() {
         return 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300';
       case 'enviado':
         return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/60 dark:text-yellow-300';
+      case 'visualizado':
+        return 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300';
       case 'aprovado':
         return 'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300';
       case 'rejeitado':
-      case 'convertido_os': // Assuming 'convertido_os' also indicates a "finalized" or "closed" state
         return 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-300';
+      case 'expirado':
+        return 'bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-300';
+      case 'convertido_os':
+        return 'bg-teal-100 text-teal-700 dark:bg-teal-900/60 dark:text-teal-300';
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
     }
@@ -147,8 +152,10 @@ export default function QuotesPage() {
     switch (status) {
       case 'rascunho': return 'Rascunho';
       case 'enviado': return 'Enviado';
+      case 'visualizado': return 'Visualizado';
       case 'aprovado': return 'Aprovado';
       case 'rejeitado': return 'Rejeitado';
+      case 'expirado': return 'Expirado';
       case 'convertido_os': return 'Convertido em OS';
       default: return status;
     }
@@ -347,4 +354,3 @@ export default function QuotesPage() {
     </div>
   );
 }
-

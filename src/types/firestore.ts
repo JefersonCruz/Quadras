@@ -140,7 +140,7 @@ export interface EmpresaPrestadorContrato {
     cnpj?: string;
     endereco?: string;
     responsavelTecnico?: string;
-    email?: string; // Added email for provider for signature context
+    email?: string;
 }
 
 export interface Contrato {
@@ -212,7 +212,7 @@ export interface Orcamento {
   descricaoServicos: string; // General description of services/scope
   // itens?: OrcamentoItem[]; // For detailed line items - future enhancement
   valorTotalEstimado: number;
-  status: 'rascunho' | 'enviado' | 'aprovado' | 'rejeitado' | 'convertido_os';
+  status: 'rascunho' | 'enviado' | 'visualizado' | 'aprovado' | 'rejeitado' | 'expirado' | 'convertido_os';
   observacoes?: string; // Optional notes
   // Campos da empresa que emitiu o orçamento (para o PDF)
   empresaNome?: string;
@@ -221,4 +221,7 @@ export interface Orcamento {
   empresaTelefone?: string;
   empresaEmail?: string;
   empresaLogotipoUrl?: string;
+  // Campos para o link temporário (para o futuro)
+  linkTemporarioUrl?: string;
+  linkTemporarioExpiraEm?: Timestamp;
 }
