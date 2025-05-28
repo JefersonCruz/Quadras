@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Loader2, FilePlus2, DollarSign } from "lucide-react"; // Added DollarSign
+import { CalendarIcon, Loader2, FilePlus2, DollarSign } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
 import type { Orcamento, Cliente, Projeto, Empresa } from "@/types/firestore";
@@ -41,7 +41,7 @@ export default function NewQuotePage() {
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [formSubmitting, setFormSubmitting] = useState(false); // Renamed from loading to formSubmitting
+  const [formSubmitting, setFormSubmitting] = useState(false);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [projects, setProjects] = useState<Projeto[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Projeto[]>([]);
@@ -127,7 +127,7 @@ export default function NewQuotePage() {
       empresaEndereco: empresaUsuario?.endereco || "",
       empresaTelefone: empresaUsuario?.telefone || "",
       empresaEmail: empresaUsuario?.email || "",
-      empresaLogotipoUrl: empresaUsuario?.logotipo || "",
+      empresaLogotipoUrl: empresaUsuario?.logotipo || "", // Added this line
     };
 
     if (data.projetoId && data.projetoId.trim() !== "") {
@@ -301,5 +301,3 @@ export default function NewQuotePage() {
     </div>
   );
 }
-
-    
