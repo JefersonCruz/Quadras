@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import PageHeader from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Settings, FileText, Tag, Edit, Trash2, PlusCircle, Loader2 } from "lucide-react";
@@ -33,16 +33,10 @@ import { z } from "zod";
 import type { GlobalLabelTemplate } from "@/types/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/contexts/AuthContext";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { collection, addDoc, Timestamp, getDocs, query, orderBy } from "firebase/firestore";
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-// Mock data for label templates - will be replaced by fetched data later
-const mockLabelTemplates: GlobalLabelTemplate[] = [
-  { id: "1", name: "Padrão Residencial - Iluminação", description: "Etiqueta para circuitos de iluminação em quadros residenciais." },
-  { id: "2", name: "Padrão Residencial - Tomadas TUG", description: "Etiqueta para circuitos de Tomadas de Uso Geral." },
-  { id: "3", name: "Padrão Comercial - Força Motriz", description: "Etiqueta para motores e equipamentos de força." },
-  { id: "4", name: "IDR Geral", description: "Etiqueta para Dispositivo Diferencial Residual geral." },
-  { id: "5", name: "DPS Geral", description: "Etiqueta para Dispositivo de Proteção contra Surtos geral." },
-];
 
 const labelTemplateSchema = z.object({
   name: z.string().min(3, "Nome do template deve ter no mínimo 3 caracteres."),
@@ -53,15 +47,47 @@ type LabelTemplateFormData = z.infer<typeof labelTemplateSchema>;
 
 export default function AdminTemplatesPage() {
   const { toast } = useToast();
-  const { user } = useAuth(); // Get current admin user
+  const { user, isAdmin } = useAuth();
   const [isLabelDialogFormOpen, setIsLabelDialogFormOpen] = useState(false);
-  const [editingLabelTemplate, setEditingLabelTemplate] = useState<GlobalLabelTemplate | null>(null); // For future edit
+  const [editingLabelTemplate, setEditingLabelTemplate] = useState<GlobalLabelTemplate | null>(null);
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const [labelTemplates, setLabelTemplates] = useState<GlobalLabelTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
 
   const { control, handleSubmit, reset, formState: { errors } } = useForm<LabelTemplateFormData>({
     resolver: zodResolver(labelTemplateSchema),
     defaultValues: { name: "", description: "" },
   });
+
+  const fetchLabelTemplates = useCallback(async () => {
+    if (!user || !isAdmin) {
+      setLabelTemplates([]);
+      setLoadingTemplates(false);
+      return;
+    }
+    setLoadingTemplates(true);
+    try {
+      const templatesCollection = collection(db, "globalLabelTemplates");
+      const q = query(templatesCollection, orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+      const templatesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GlobalLabelTemplate));
+      setLabelTemplates(templatesData);
+    } catch (error) {
+      console.error("Error fetching label templates:", error);
+      toast({
+        title: "Erro ao Carregar Templates",
+        description: "Não foi possível buscar os templates de etiqueta.",
+        variant: "destructive",
+      });
+      setLabelTemplates([]);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, [user, isAdmin, toast]);
+
+  useEffect(() => {
+    fetchLabelTemplates();
+  }, [fetchLabelTemplates]);
 
   const openNewLabelTemplateForm = () => {
     setEditingLabelTemplate(null);
@@ -70,10 +96,10 @@ export default function AdminTemplatesPage() {
   };
 
   const onLabelTemplateSubmit = async (data: LabelTemplateFormData) => {
-    if (!user || !user.uid) {
+    if (!user || !user.uid || !isAdmin) {
       toast({
-        title: "Erro de Autenticação",
-        description: "Usuário não autenticado. Faça login novamente.",
+        title: "Erro de Autenticação ou Permissão",
+        description: "Usuário não autenticado ou sem permissão para esta ação.",
         variant: "destructive",
       });
       setFormSubmitting(false);
@@ -89,7 +115,6 @@ export default function AdminTemplatesPage() {
         createdAt: Timestamp.now(),
       };
       
-      // Save to Firestore in 'globalLabelTemplates' collection
       await addDoc(collection(db, "globalLabelTemplates"), newTemplateData);
       
       toast({
@@ -98,8 +123,7 @@ export default function AdminTemplatesPage() {
       });
       
       setIsLabelDialogFormOpen(false);
-      // TODO: Refetch templates list after saving to update the table
-      // For now, we rely on mock data for display.
+      fetchLabelTemplates(); // Refetch templates to update the list
     } catch (error) {
       console.error("Error saving label template:", error);
       toast({
@@ -132,21 +156,30 @@ export default function AdminTemplatesPage() {
               <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Template de Etiqueta
             </Button>
             
-            {mockLabelTemplates.length > 0 ? (
+            {loadingTemplates ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-2">Carregando templates...</p>
+              </div>
+            ) : labelTemplates.length > 0 ? (
               <div className="overflow-x-auto border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nome do Template</TableHead>
-                      <TableHead>Descrição Curta</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Criado Em</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockLabelTemplates.map((template) => (
+                    {labelTemplates.map((template) => (
                       <TableRow key={template.id}>
                         <TableCell className="font-medium">{template.name}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{template.description}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {template.createdAt ? format(template.createdAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'N/A'}
+                        </TableCell>
                         <TableCell className="text-right space-x-2">
                           <Button variant="outline" size="sm" disabled>
                             <Edit className="h-3 w-3 mr-1" /> Editar
@@ -231,3 +264,4 @@ export default function AdminTemplatesPage() {
     </div>
   );
 }
+
