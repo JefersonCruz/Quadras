@@ -16,7 +16,9 @@
         "source": "**",
         "function": "nextApp"
       }
-    ]
+    ],
+    "trailingSlash": false,
+    "cleanUrls": true
   },
   "firestore": {
     "database": "(default)",

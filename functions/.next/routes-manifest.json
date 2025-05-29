@@ -110,6 +110,18 @@
       "namedRegex": "^/dashboard/projects/new(?:/)?$"
     },
     {
+      "page": "/dashboard/quotes",
+      "regex": "^/dashboard/quotes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/quotes(?:/)?$"
+    },
+    {
+      "page": "/dashboard/quotes/new",
+      "regex": "^/dashboard/quotes/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/quotes/new(?:/)?$"
+    },
+    {
       "page": "/dashboard/settings",
       "regex": "^/dashboard/settings(?:/)?$",
       "routeKeys": {},

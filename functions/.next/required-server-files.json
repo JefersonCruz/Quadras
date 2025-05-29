@@ -62,12 +62,12 @@
         {
           "protocol": "https",
           "hostname": "placehold.co",
-          "port": "",
           "pathname": "/**"
         },
         {
           "protocol": "https",
-          "hostname": "firebasestorage.googleapis.com"
+          "hostname": "firebasestorage.googleapis.com",
+          "pathname": "/**"
         }
       ],
       "unoptimized": false
@@ -110,7 +110,9 @@
     "outputFileTracingRoot": "/home/user/studio",
     "allowedDevOrigins": [],
     "experimental": {
-      "allowedDevOrigins": [],
+      "allowedDevOrigins": [
+        "https://9003-firebase-studio-1748142985465.cluster-duylic2g3fbzerqpzxxbw6helm.cloudworkstations.dev"
+      ],
       "nodeMiddleware": false,
       "cacheLife": {
         "default": {
