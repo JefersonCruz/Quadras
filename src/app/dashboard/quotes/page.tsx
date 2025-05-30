@@ -4,7 +4,7 @@
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText, ExternalLink, AlertTriangle } from "lucide-react"; // Added AlertTriangle
+import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText, ExternalLink, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
@@ -43,7 +43,7 @@ export default function QuotesPage() {
   const [projects, setProjects] = useState<Projeto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [fetchError, setFetchError] = useState<string | null>(null); // State for fetch error message
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [selectedQuoteForViewing, setSelectedQuoteForViewing] = useState<Orcamento | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -59,7 +59,7 @@ export default function QuotesPage() {
       return;
     }
     setLoading(true);
-    setFetchError(null); // Reset error state
+    setFetchError(null);
     try {
       const clientQuery = query(collection(db, "clientes"), where("owner", "==", user.uid));
       const clientSnapshot = await getDocs(clientQuery);
@@ -83,12 +83,13 @@ export default function QuotesPage() {
     } catch (error: any) {
       console.error("Error fetching quotes or related data:", error);
        if (error.code === 'failed-precondition' && error.message && error.message.includes('index')) {
+        const link = extractFirebaseIndexLink(error.message);
         toast({
             title: "Índice do Firestore Necessário",
             description: (
               <div>
                 A consulta de orçamentos (ou dados relacionados) requer um índice que não existe.
-                <Button variant="link" className="p-0 h-auto ml-1 text-destructive-foreground dark:text-destructive-foreground" onClick={() => window.open(extractFirebaseIndexLink(error.message), '_blank')}>
+                <Button variant="link" className="p-0 h-auto ml-1 text-destructive-foreground dark:text-destructive-foreground" onClick={() => window.open(link, '_blank')}>
                   Clique aqui para criar o índice <ExternalLink className="h-3 w-3 ml-1"/>
                 </Button>
                 <p className="text-xs mt-1">Detalhes do erro: {error.message}</p>
@@ -97,11 +98,12 @@ export default function QuotesPage() {
             variant: "destructive",
             duration: 20000, 
           });
-        setFetchError("Um índice do Firestore é necessário. Verifique o console para mais detalhes e o link de criação.");
+        setFetchError("Um índice do Firestore é necessário para listar os orçamentos. Verifique o console para mais detalhes e o link de criação.");
       } else {
         toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar orçamentos, clientes ou projetos.", variant: "destructive" });
         setFetchError(error.message || "Ocorreu um erro desconhecido ao buscar os dados.");
       }
+      setQuotes([]); // Clear quotes on error
     } finally {
       setLoading(false);
     }
@@ -118,16 +120,18 @@ export default function QuotesPage() {
   };
 
   const getProjectName = (projectId: string | undefined): string => {
-    if (!projectId) return "N/A";
+    if (!projectId) return "-"; // Return a dash if no project ID
     const project = projects.find(p => p.id === projectId);
     return project?.nome || "Projeto não vinculado";
   };
 
   const filteredQuotes = quotes.filter(quote => {
     const clientName = getClientName(quote.clienteId).toLowerCase();
+    const projectName = getProjectName(quote.projetoId).toLowerCase();
     const searchTermLower = searchTerm.toLowerCase();
     return quote.numeroOrcamento.toLowerCase().includes(searchTermLower) ||
            clientName.includes(searchTermLower) ||
+           (quote.projetoId && projectName.includes(searchTermLower)) ||
            (quote.id && quote.id.toLowerCase().includes(searchTermLower));
   });
 
@@ -182,11 +186,11 @@ export default function QuotesPage() {
 
     if (fetchError) {
       return (
-        <div className="flex flex-col justify-center items-center py-20 text-center text-destructive">
+        <div className="flex flex-col justify-center items-center py-20 text-center text-destructive bg-destructive/10 p-6 rounded-md">
           <AlertTriangle className="h-12 w-12 mb-4" />
           <h3 className="text-xl font-semibold">Erro ao Carregar Orçamentos</h3>
-          <p className="text-sm mt-2">{fetchError}</p>
-          <Button onClick={fetchData} className="mt-6">Tentar Novamente</Button>
+          <p className="text-sm mt-2 mb-4">{fetchError}</p>
+          <Button onClick={fetchData} variant="destructive">Tentar Novamente</Button>
         </div>
       );
     }
@@ -220,6 +224,7 @@ export default function QuotesPage() {
             <TableRow>
               <TableHead>Número</TableHead>
               <TableHead>Cliente</TableHead>
+              <TableHead>Projeto</TableHead>
               <TableHead>Data Criação</TableHead>
               <TableHead>Validade</TableHead>
               <TableHead>Valor Total</TableHead>
@@ -232,6 +237,7 @@ export default function QuotesPage() {
               <TableRow key={quote.id}>
                 <TableCell className="font-medium">{quote.numeroOrcamento}</TableCell>
                 <TableCell>{getClientName(quote.clienteId)}</TableCell>
+                <TableCell>{getProjectName(quote.projetoId)}</TableCell>
                 <TableCell>{quote.dataCriacao ? format(quote.dataCriacao.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
                 <TableCell>{quote.dataValidade ? format(quote.dataValidade.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
                 <TableCell>R$ {quote.valorTotalEstimado.toFixed(2)}</TableCell>
@@ -298,7 +304,7 @@ export default function QuotesPage() {
           <CardTitle>Lista de Orçamentos</CardTitle>
           <div className="mt-2">
             <Input
-              placeholder="Buscar por Nº, cliente ou ID..."
+              placeholder="Buscar por Nº, cliente, projeto ou ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -324,11 +330,9 @@ export default function QuotesPage() {
               <div className="space-y-4 text-sm py-4">
                 
                 <div className="p-3 border rounded-md bg-muted/30">
-                  <h4 className="font-semibold mb-1 text-foreground">Cliente</h4>
-                  <p><strong>Nome:</strong> {getClientName(selectedQuoteForViewing.clienteId)}</p>
-                  {projects.find(p => p.id === selectedQuoteForViewing.projetoId) && (
-                    <p><strong>Projeto Vinculado:</strong> {getProjectName(selectedQuoteForViewing.projetoId)}</p>
-                  )}
+                  <h4 className="font-semibold mb-1 text-foreground">Cliente e Projeto</h4>
+                  <p><strong>Cliente:</strong> {getClientName(selectedQuoteForViewing.clienteId)}</p>
+                  <p><strong>Projeto Vinculado:</strong> {getProjectName(selectedQuoteForViewing.projetoId)}</p>
                 </div>
 
                 <div className="p-3 border rounded-md">
@@ -384,3 +388,4 @@ export default function QuotesPage() {
     </div>
   );
 }
+
