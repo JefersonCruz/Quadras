@@ -1,46 +1,83 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# =============================
+# DEPENDÊNCIAS E BUILD AUTOMÁTICO
+# =============================
+node_modules/
+.pnp/
 .pnp.*
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+.cache/
+.build/
+dist/
+out/
+coverage/
+*.tsbuildinfo
 
-# testing
-/coverage
+# =============================
+# NEXT.JS
+# =============================
+.next/
+out/
+.vercel/
 
-# next.js
-/.next/
-/out/
+# =============================
+# FIREBASE
+# =============================
+.firebase/
+.firebase/**/*
+!.firebase/*.json
 
-# production
-/build
+# =============================
+# GENKIT
+# =============================
+.genkit/
 
-# misc
-.DS_Store
-*.pem
-
-# debug
+# =============================
+# LOGS E DEBUG
+# =============================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+firebase-debug.log
+firestore-debug.log
+dataconnect-debug.log
+.firebase/logs/*.log
 
-# vercel
-.vercel
+# =============================
+# SISTEMA OPERACIONAL
+# =============================
+.DS_Store
+Thumbs.db
 
-# typescript
-*.tsbuildinfo
+# =============================
+# SEGURANÇA / CERTIFICADOS
+# =============================
+*.pem
+*.key
+
+# =============================
+# ARQUIVOS GRANDES INDESEJADOS
+# =============================
+*.tar.gz
+*.zip
+*.pack
+*.node
+*.exe
+*.iso
+
+# =============================
+# CONFIGS DE DEV
+# =============================
+.env
+.env.*
 next-env.d.ts
 
-.genkit/*
-.env*
-
-# firebase
-firebase-debug.log
-firestore-debug.log.firebase/logs/*.log
-dataconnect-debug.log
+# =============================
+# OUTROS
+# =============================
+*.swp
+*.swo
