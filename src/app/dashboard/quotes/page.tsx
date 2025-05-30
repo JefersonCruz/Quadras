@@ -4,7 +4,7 @@
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText } from "lucide-react";
+import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
@@ -47,6 +47,11 @@ export default function QuotesPage() {
   const [selectedQuoteForViewing, setSelectedQuoteForViewing] = useState<Orcamento | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
+  const extractFirebaseIndexLink = (errorMessage: string): string => {
+    const match = errorMessage.match(/(https?:\/\/[^\s]+)/);
+    return match ? match[0] : "https://console.firebase.google.com/";
+  };
+
   const fetchData = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -74,34 +79,29 @@ export default function QuotesPage() {
       setQuotes(quotesData);
 
     } catch (error: any) {
-      console.error("Error fetching quotes or clients:", error);
-       if (error.code === 'failed-precondition' && error.message.includes('index')) {
+      console.error("Error fetching quotes or related data:", error);
+       if (error.code === 'failed-precondition' && error.message && error.message.includes('index')) {
         toast({
             title: "Índice do Firestore Necessário",
             description: (
               <div>
-                A consulta de orçamentos requer um índice que não existe.
-                <a href={extractFirebaseIndexLink(error.message)} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 hover:text-blue-800 ml-1">
-                  Clique aqui para criar o índice no Firebase Console.
-                </a>
+                A consulta de orçamentos (ou dados relacionados) requer um índice que não existe.
+                <Button variant="link" className="p-0 h-auto ml-1 text-destructive-foreground dark:text-destructive-foreground" onClick={() => window.open(extractFirebaseIndexLink(error.message), '_blank')}>
+                  Clique aqui para criar o índice <ExternalLink className="h-3 w-3 ml-1"/>
+                </Button>
                 <p className="text-xs mt-1">Detalhes do erro: {error.message}</p>
               </div>
             ),
             variant: "destructive",
-            duration: 20000,
+            duration: 20000, // Longer duration for user to click
           });
       } else {
-        toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar orçamentos ou clientes.", variant: "destructive" });
+        toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar orçamentos, clientes ou projetos.", variant: "destructive" });
       }
     } finally {
       setLoading(false);
     }
   }, [user, toast]);
-
-  const extractFirebaseIndexLink = (errorMessage: string): string => {
-    const match = errorMessage.match(/(https?:\/\/[^\s]+)/);
-    return match ? match[0] : "https://console.firebase.google.com/";
-  };
 
   useEffect(() => {
     fetchData();
@@ -354,3 +354,4 @@ export default function QuotesPage() {
     </div>
   );
 }
+
