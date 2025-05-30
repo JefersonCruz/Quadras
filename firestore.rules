@@ -113,43 +113,47 @@ service cloud.firestore {
                           ( contractResource().cliente != null && authedUserEmail() == contractResource().cliente.email &&
                             incomingContractData().assinaturas.cliente.dataHora == request.time &&
                             incomingContractData().assinaturas.cliente.nome == contractResource().cliente.nome &&
-                            // Verifica se apenas o campo 'cliente' está sendo alterado dentro de 'assinaturas'
-                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['cliente'])) ||
-                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['cliente'])) )
+                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['cliente'])) &&
+                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['cliente'])) // Para a primeira assinatura no mapa
                           ) ||
                           // Testemunha 1 assinando
                           ( contractResource().testemunhas != null && contractResource().testemunhas[0] != null && authedUserEmail() == contractResource().testemunhas[0].email &&
                             incomingContractData().assinaturas.testemunha1.dataHora == request.time &&
                             incomingContractData().assinaturas.testemunha1.nome == contractResource().testemunhas[0].nome &&
-                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['testemunha1'])) ||
-                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha1'])) )
+                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha1'])) &&
+                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['testemunha1']))
                           ) ||
                           // Testemunha 2 assinando
                           ( contractResource().testemunhas != null && contractResource().testemunhas[1] != null && authedUserEmail() == contractResource().testemunhas[1].email &&
                             incomingContractData().assinaturas.testemunha2.dataHora == request.time &&
                             incomingContractData().assinaturas.testemunha2.nome == contractResource().testemunhas[1].nome &&
-                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['testemunha2'])) ||
-                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha2'])) )
+                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha2'])) &&
+                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['testemunha2']))
                           ) ||
                           // Prestador (criador) assinando via este fluxo
-                          ( request.auth.uid == contractResource().createdBy && contractResource().empresaPrestador != null && 
+                          ( request.auth.uid == contractResource().createdBy && contractResource().empresaPrestador != null && // Garante que empresaPrestador exista
                             incomingContractData().assinaturas.prestador.dataHora == request.time &&
                             incomingContractData().assinaturas.prestador.nome == contractResource().empresaPrestador.responsavelTecnico &&
-                            ( (contractResource().assinaturas == null && incomingContractData().assinaturas.keys().hasOnly(['prestador'])) ||
-                              (contractResource().assinaturas != null && incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['prestador'])) )
+                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['prestador'])) &&
+                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['prestador']))
                           )
                         )
                       )
                     );
     } // Fim do match /contratos/{contractId}
 
-    // Templates Globais (exemplo, não usado atualmente mas bom para estrutura)
-    match /globalTemplates/{templateId} {
+    // Coleção de Orçamentos
+    match /orcamentos/{orcamentoId} {
+      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.createdBy || isAdmin());
+      allow create: if request.auth != null && (request.auth.uid == request.resource.data.createdBy || isAdmin());
+    }
+
+    // Global Templates (exemplo, não usado atualmente mas bom para estrutura)
+    // Renomeado para globalLabelTemplates para corresponder à coleção usada no admin panel
+    match /globalLabelTemplates/{templateId} {
       allow read: if request.auth != null; // Todos os usuários autenticados podem ler
       allow write: if isAdmin();           // Apenas admins podem escrever
     }
 
   } // Fim do match /databases/{database}/documents
 } // Fim do service cloud.firestore
-
-    
