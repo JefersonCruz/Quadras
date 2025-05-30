@@ -4,7 +4,7 @@
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText, ExternalLink } from "lucide-react";
+import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText, ExternalLink, AlertTriangle } from "lucide-react"; // Added AlertTriangle
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
@@ -43,6 +43,7 @@ export default function QuotesPage() {
   const [projects, setProjects] = useState<Projeto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [fetchError, setFetchError] = useState<string | null>(null); // State for fetch error message
 
   const [selectedQuoteForViewing, setSelectedQuoteForViewing] = useState<Orcamento | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -58,6 +59,7 @@ export default function QuotesPage() {
       return;
     }
     setLoading(true);
+    setFetchError(null); // Reset error state
     try {
       const clientQuery = query(collection(db, "clientes"), where("owner", "==", user.uid));
       const clientSnapshot = await getDocs(clientQuery);
@@ -93,10 +95,12 @@ export default function QuotesPage() {
               </div>
             ),
             variant: "destructive",
-            duration: 20000, // Longer duration for user to click
+            duration: 20000, 
           });
+        setFetchError("Um índice do Firestore é necessário. Verifique o console para mais detalhes e o link de criação.");
       } else {
         toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar orçamentos, clientes ou projetos.", variant: "destructive" });
+        setFetchError(error.message || "Ocorreu um erro desconhecido ao buscar os dados.");
       }
     } finally {
       setLoading(false);
@@ -166,6 +170,115 @@ export default function QuotesPage() {
     setIsViewDialogOpen(true);
   };
 
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex flex-col justify-center items-center py-20 text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-lg text-muted-foreground">Carregando orçamentos...</p>
+        </div>
+      );
+    }
+
+    if (fetchError) {
+      return (
+        <div className="flex flex-col justify-center items-center py-20 text-center text-destructive">
+          <AlertTriangle className="h-12 w-12 mb-4" />
+          <h3 className="text-xl font-semibold">Erro ao Carregar Orçamentos</h3>
+          <p className="text-sm mt-2">{fetchError}</p>
+          <Button onClick={fetchData} className="mt-6">Tentar Novamente</Button>
+        </div>
+      );
+    }
+
+    if (filteredQuotes.length === 0) {
+      return (
+        <div className="text-center py-20">
+          <Calculator className="mx-auto h-16 w-16 text-muted-foreground mb-6" />
+          <h3 className="text-2xl font-semibold text-foreground mb-2">
+            {searchTerm ? "Nenhum orçamento encontrado para sua busca." : "Nenhum orçamento cadastrado."}
+          </h3>
+          <p className="text-muted-foreground mb-6">
+            {searchTerm ? "Tente um termo de busca diferente ou limpe a busca." : "Comece criando seu primeiro orçamento."}
+          </p>
+          {!searchTerm && (
+            <Button asChild size="lg">
+              <Link href="/dashboard/quotes/new">
+                <PlusCircle className="mr-2 h-5 w-5" /> Criar Novo Orçamento
+              </Link>
+            </Button>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <TooltipProvider>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Número</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Data Criação</TableHead>
+              <TableHead>Validade</TableHead>
+              <TableHead>Valor Total</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredQuotes.map((quote) => (
+              <TableRow key={quote.id}>
+                <TableCell className="font-medium">{quote.numeroOrcamento}</TableCell>
+                <TableCell>{getClientName(quote.clienteId)}</TableCell>
+                <TableCell>{quote.dataCriacao ? format(quote.dataCriacao.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
+                <TableCell>{quote.dataValidade ? format(quote.dataValidade.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
+                <TableCell>R$ {quote.valorTotalEstimado.toFixed(2)}</TableCell>
+                <TableCell>
+                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusClasses(quote.status)}`}>
+                    {getStatusLabel(quote.status)}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right space-x-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openViewDialog(quote)}>
+                        <Eye className="h-4 w-4" />
+                        <span className="sr-only">Ver Detalhes</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Ver Detalhes</p></TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                        <Edit3 className="h-4 w-4" />
+                        <span className="sr-only">Editar Orçamento</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Editar Orçamento (em breve)</p></TooltipContent>
+                  </Tooltip>
+                   <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                        <FileText className="h-4 w-4" />
+                        <span className="sr-only">Baixar PDF</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Baixar PDF (em breve)</p></TooltipContent>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        </TooltipProvider>
+      </div>
+    );
+  };
+
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -193,90 +306,7 @@ export default function QuotesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex justify-center items-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Carregando orçamentos...</p>
-            </div>
-          ) : filteredQuotes.length === 0 ? (
-            <div className="text-center py-8">
-              <Calculator className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-xl font-semibold text-foreground">Nenhum orçamento encontrado.</h3>
-              <p className="text-muted-foreground">
-                {searchTerm ? "Tente um termo de busca diferente." : "Comece criando seu primeiro orçamento."}
-              </p>
-              {!searchTerm && (
-                <Button asChild className="mt-4">
-                  <Link href="/dashboard/quotes/new">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Criar Novo Orçamento
-                  </Link>
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <TooltipProvider>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Número</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Data Criação</TableHead>
-                    <TableHead>Validade</TableHead>
-                    <TableHead>Valor Total</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredQuotes.map((quote) => (
-                    <TableRow key={quote.id}>
-                      <TableCell className="font-medium">{quote.numeroOrcamento}</TableCell>
-                      <TableCell>{getClientName(quote.clienteId)}</TableCell>
-                      <TableCell>{quote.dataCriacao ? format(quote.dataCriacao.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
-                      <TableCell>{quote.dataValidade ? format(quote.dataValidade.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
-                      <TableCell>R$ {quote.valorTotalEstimado.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusClasses(quote.status)}`}>
-                          {getStatusLabel(quote.status)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openViewDialog(quote)}>
-                              <Eye className="h-4 w-4" />
-                              <span className="sr-only">Ver Detalhes</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p>Ver Detalhes</p></TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8" disabled>
-                              <Edit3 className="h-4 w-4" />
-                              <span className="sr-only">Editar Orçamento</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p>Editar Orçamento (em breve)</p></TooltipContent>
-                        </Tooltip>
-                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8" disabled>
-                              <FileText className="h-4 w-4" />
-                              <span className="sr-only">Baixar PDF</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p>Baixar PDF (em breve)</p></TooltipContent>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              </TooltipProvider>
-            </div>
-          )}
+          {renderContent()}
         </CardContent>
       </Card>
 
@@ -354,4 +384,3 @@ export default function QuotesPage() {
     </div>
   );
 }
-
