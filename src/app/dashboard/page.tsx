@@ -12,11 +12,12 @@ import {
   Sparkles, 
   Building, 
   PlusCircle, 
-  Edit3, 
-  FileSignature,
   ArrowRight,
-  ListChecks,
-  Compass
+  ListChecks, // For Launchpad title
+  Compass,    // For Main Actions title
+  UserPlus,   // Specific for "Novo Cliente"
+  FilePlus2,  // Specific for "Novo Projeto"
+  TagIcon     // Specific for "Criar Etiqueta"
 } from "lucide-react";
 import {
   Tooltip,
@@ -27,14 +28,14 @@ import {
 
 export default function DashboardPage() {
   const mainActions = [
-    { title: "Novo Cliente", href: "/dashboard/clients/new", icon: Users, description: "Cadastre um novo cliente rapidamente." },
-    { title: "Novo Projeto", href: "/dashboard/projects/new", icon: Briefcase, description: "Inicie um novo projeto para um cliente." },
-    { title: "Criar Etiqueta", href: "/dashboard/labels", icon: Tag, description: "Gere etiquetas técnicas para circuitos." },
+    { title: "Clientes", href: "/dashboard/clients/new", icon: Users, description: "Cadastre e gerencie seus clientes.", actionText: "Novo Cliente", actionIcon: UserPlus, tooltipText: "Adicionar um novo cliente" },
+    { title: "Projetos", href: "/dashboard/projects/new", icon: Briefcase, description: "Inicie e acompanhe seus projetos.", actionText: "Novo Projeto", actionIcon: FilePlus2, tooltipText: "Criar um novo projeto" },
+    { title: "Etiquetas Técnicas", href: "/dashboard/labels", icon: Tag, description: "Gere etiquetas para identificar circuitos.", actionText: "Criar Etiqueta", actionIcon: TagIcon, tooltipText: "Gerar novas etiquetas técnicas" },
   ];
 
   const additionalResources = [
-    { title: "Nova Ficha Técnica", href: "/dashboard/technical-sheets", icon: NotebookText, description: "Elabore fichas técnicas detalhadas.", tooltip: "Criar uma nova Ficha Técnica" },
-    { title: "Novo Contrato", href: "/dashboard/contracts/new", icon: FileSignature, description: "Crie contratos de prestação de serviço.", tooltip: "Criar um novo Contrato Digital" },
+    { title: "Fichas Técnicas", href: "/dashboard/technical-sheets", icon: NotebookText, description: "Elabore fichas técnicas detalhadas.", tooltip: "Criar ou gerenciar Fichas Técnicas" },
+    { title: "Contratos Digitais", href: "/dashboard/contracts/new", icon: FileSignature, description: "Crie contratos de prestação de serviço.", tooltip: "Criar um novo Contrato Digital" },
     { title: "Sugestões com IA", href: "/dashboard/smart-suggestions", icon: Sparkles, description: "Use IA para sugestões de templates.", imageUrl: "https://placehold.co/600x300.png", imageHint: "technology abstract", tooltip: "Explorar Sugestões Inteligentes com IA" },
     { title: "Perfil da Empresa", href: "/dashboard/company", icon: Building, description: "Gerencie os dados da sua empresa.", imageUrl: "https://placehold.co/600x300.png", imageHint: "office building", tooltip: "Gerenciar Perfil da Empresa" },
   ];
@@ -43,7 +44,7 @@ export default function DashboardPage() {
     { title: "Configure sua Empresa", description: "Preencha os dados em 'Minha Empresa'.", href: "/dashboard/company", icon: Building, tooltip: "Ir para Configurações da Empresa" },
     { title: "Adicione seu Primeiro Cliente", description: "Cadastre um cliente na seção 'Clientes'.", href: "/dashboard/clients/new", icon: Users, tooltip: "Adicionar Novo Cliente" },
     { title: "Crie um Projeto", description: "Inicie um projeto e vincule-o a um cliente.", href: "/dashboard/projects/new", icon: Briefcase, tooltip: "Criar Novo Projeto" },
-    { title: "Explore as Funcionalidades", description: "Utilize Etiquetas, Fichas, Contratos e mais.", href: "/dashboard/labels", icon: Edit3, tooltip: "Explorar Etiquetas" },
+    { title: "Explore as Funcionalidades", description: "Utilize Etiquetas, Fichas, Contratos e mais.", href: "/dashboard/labels", icon: Compass, tooltip: "Explorar Funcionalidades" },
   ];
 
   return (
@@ -56,7 +57,7 @@ export default function DashboardPage() {
 
         {/* Ações Principais */}
         <section>
-          <h3 className="text-2xl font-semibold mb-5 text-foreground flex items-center"><Compass className="mr-3 h-7 w-7 text-primary"/>Ações Principais</h3>
+          <h3 className="text-2xl font-semibold mb-5 text-foreground flex items-center"><Compass className="mr-3 h-7 w-7 text-primary"/>Acesso Rápido</h3>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {mainActions.map((action) => (
               <Card key={action.href} className="hover:shadow-xl transition-shadow duration-300 ease-in-out flex flex-col">
@@ -73,11 +74,14 @@ export default function DashboardPage() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button asChild size="default" className="w-full">
-                        <Link href={action.href}><PlusCircle className="mr-2" /> Acessar</Link>
+                        <Link href={action.href}>
+                          {action.actionIcon && <action.actionIcon className="mr-2 h-4 w-4" />} 
+                          {action.actionText}
+                        </Link>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Ir para {action.title}</p>
+                      <p>{action.tooltipText}</p>
                     </TooltipContent>
                   </Tooltip>
                 </CardFooter>
@@ -86,7 +90,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Guia de Início Rápido */}
+        {/* Guia de Início Rápido (Launchpad) */}
         <section>
           <Card className="bg-card/70 border-primary/30">
             <CardHeader>
@@ -95,12 +99,12 @@ export default function DashboardPage() {
               </CardTitle>
               <CardDescription>Siga estes passos para configurar e começar a usar o ANODE Lite.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-3">
               <ul className="space-y-4">
                 {gettingStartedSteps.map((step, index) => (
-                  <li key={step.title} className="flex items-start gap-4 pb-3 border-b border-border last:border-b-0 last:pb-0">
-                    <div className="flex-shrink-0 mt-1 p-2 bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold">
-                       {index + 1}
+                  <li key={step.title} className="flex items-start gap-3 pb-3 border-b border-border last:border-b-0 last:pb-0">
+                    <div className="flex-shrink-0 mt-1 p-2 bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center">
+                       <step.icon className="h-4 w-4" />
                     </div>
                     <div className="flex-grow">
                       <h4 className="font-medium text-foreground">{step.title}</h4>
@@ -108,7 +112,7 @@ export default function DashboardPage() {
                     </div>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button asChild variant="outline" size="sm" className="shrink-0">
+                        <Button asChild variant="outline" size="sm" className="shrink-0 ml-auto">
                           <Link href={step.href}><ArrowRight className="h-4 w-4" /></Link>
                         </Button>
                       </TooltipTrigger>
@@ -119,7 +123,7 @@ export default function DashboardPage() {
                   </li>
                 ))}
               </ul>
-               <div className="pt-3 text-center">
+               <div className="pt-4 text-center">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button asChild variant="link">
@@ -137,7 +141,7 @@ export default function DashboardPage() {
         
         {/* Recursos Adicionais */}
         <section>
-          <h3 className="text-2xl font-semibold mb-5 text-foreground">Recursos Adicionais</h3>
+          <h3 className="text-2xl font-semibold mb-5 text-foreground">Mais Ferramentas e Recursos</h3>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {additionalResources.map((resource) => (
               <Card key={resource.href} className="hover:shadow-lg transition-shadow duration-300 ease-in-out flex flex-col overflow-hidden">
@@ -157,10 +161,9 @@ export default function DashboardPage() {
                     <resource.icon className="h-5 w-5 mr-2 text-accent" />
                     {resource.title}
                   </CardTitle>
-                  <CardDescription className="text-xs text-muted-foreground h-10">{resource.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow">
-                  {/* Content can be added here if needed later */}
+                    <p className="text-sm text-muted-foreground h-10">{resource.description}</p>
                 </CardContent>
                 <CardFooter>
                    <Tooltip>
@@ -183,3 +186,5 @@ export default function DashboardPage() {
     </TooltipProvider>
   );
 }
+
+    
