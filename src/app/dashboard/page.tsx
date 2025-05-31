@@ -7,7 +7,7 @@ import Image from "next/image";
 import { 
   Users, 
   Briefcase, 
-  Tag as TagIconLucide, // Renamed to avoid conflict with HTML tag
+  Tag as TagIconLucide,
   NotebookText, 
   Sparkles, 
   Building, 
@@ -16,8 +16,9 @@ import {
   Compass,
   UserPlus,
   FilePlus2,
-  Settings, // For "Configure sua Empresa"
-  BookOpenCheck, // For "Ver Tutorial Completo"
+  Settings,
+  BookOpenCheck,
+  FileSignature // <<< Added FileSignature here
 } from "lucide-react";
 import {
   Tooltip,
