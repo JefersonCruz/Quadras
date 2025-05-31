@@ -28,12 +28,6 @@ export default function DashboardPage() {
         description="Seu centro de controle para gerenciar clientes, projetos e documentação técnica de forma eficiente."
       />
 
-      {/* Test message added by AI Prototyper */}
-      <p className="text-center text-lg font-semibold text-green-600 p-4 bg-green-100 border border-green-300 rounded-md">
-        Olá! Esta é uma mensagem de teste para verificar a capacidade de modificação de código.
-      </p>
-      {/* End of test message */}
-
       <section>
         <h3 className="text-xl font-semibold mb-4 text-foreground">Ações Rápidas</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
