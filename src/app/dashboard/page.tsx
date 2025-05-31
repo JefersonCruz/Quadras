@@ -7,17 +7,17 @@ import Image from "next/image";
 import { 
   Users, 
   Briefcase, 
-  Tag, 
+  Tag as TagIconLucide, // Renamed to avoid conflict with HTML tag
   NotebookText, 
   Sparkles, 
   Building, 
-  PlusCircle, 
   ArrowRight,
-  ListChecks, // For Launchpad title
-  Compass,    // For Main Actions title
-  UserPlus,   // Specific for "Novo Cliente"
-  FilePlus2,  // Specific for "Novo Projeto"
-  TagIcon     // Specific for "Criar Etiqueta"
+  ListChecks,
+  Compass,
+  UserPlus,
+  FilePlus2,
+  Settings, // For "Configure sua Empresa"
+  BookOpenCheck, // For "Ver Tutorial Completo"
 } from "lucide-react";
 import {
   Tooltip,
@@ -30,7 +30,7 @@ export default function DashboardPage() {
   const mainActions = [
     { title: "Clientes", href: "/dashboard/clients/new", icon: Users, description: "Cadastre e gerencie seus clientes.", actionText: "Novo Cliente", actionIcon: UserPlus, tooltipText: "Adicionar um novo cliente" },
     { title: "Projetos", href: "/dashboard/projects/new", icon: Briefcase, description: "Inicie e acompanhe seus projetos.", actionText: "Novo Projeto", actionIcon: FilePlus2, tooltipText: "Criar um novo projeto" },
-    { title: "Etiquetas Técnicas", href: "/dashboard/labels", icon: Tag, description: "Gere etiquetas para identificar circuitos.", actionText: "Criar Etiqueta", actionIcon: TagIcon, tooltipText: "Gerar novas etiquetas técnicas" },
+    { title: "Etiquetas Técnicas", href: "/dashboard/labels", icon: TagIconLucide, description: "Gere etiquetas para identificar circuitos.", actionText: "Criar Etiqueta", actionIcon: TagIconLucide, tooltipText: "Gerar novas etiquetas técnicas" },
   ];
 
   const additionalResources = [
@@ -41,9 +41,9 @@ export default function DashboardPage() {
   ];
 
   const gettingStartedSteps = [
-    { title: "Configure sua Empresa", description: "Preencha os dados em 'Minha Empresa'.", href: "/dashboard/company", icon: Building, tooltip: "Ir para Configurações da Empresa" },
-    { title: "Adicione seu Primeiro Cliente", description: "Cadastre um cliente na seção 'Clientes'.", href: "/dashboard/clients/new", icon: Users, tooltip: "Adicionar Novo Cliente" },
-    { title: "Crie um Projeto", description: "Inicie um projeto e vincule-o a um cliente.", href: "/dashboard/projects/new", icon: Briefcase, tooltip: "Criar Novo Projeto" },
+    { title: "Configure sua Empresa", description: "Preencha os dados em 'Minha Empresa'.", href: "/dashboard/company", icon: Settings, tooltip: "Ir para Configurações da Empresa" },
+    { title: "Adicione seu Primeiro Cliente", description: "Cadastre um cliente na seção 'Clientes'.", href: "/dashboard/clients/new", icon: UserPlus, tooltip: "Adicionar Novo Cliente" },
+    { title: "Crie um Projeto", description: "Inicie um projeto e vincule-o a um cliente.", href: "/dashboard/projects/new", icon: FilePlus2, tooltip: "Criar Novo Projeto" },
     { title: "Explore as Funcionalidades", description: "Utilize Etiquetas, Fichas, Contratos e mais.", href: "/dashboard/labels", icon: Compass, tooltip: "Explorar Funcionalidades" },
   ];
 
@@ -57,7 +57,7 @@ export default function DashboardPage() {
 
         {/* Ações Principais */}
         <section>
-          <h3 className="text-2xl font-semibold mb-5 text-foreground flex items-center"><Compass className="mr-3 h-7 w-7 text-primary"/>Acesso Rápido</h3>
+          <h3 className="text-2xl font-semibold mb-5 text-foreground flex items-center"><Compass className="mr-3 h-7 w-7 text-primary"/>Ações Principais</h3>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {mainActions.map((action) => (
               <Card key={action.href} className="hover:shadow-xl transition-shadow duration-300 ease-in-out flex flex-col">
@@ -101,7 +101,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <ul className="space-y-4">
-                {gettingStartedSteps.map((step, index) => (
+                {gettingStartedSteps.map((step) => (
                   <li key={step.title} className="flex items-start gap-3 pb-3 border-b border-border last:border-b-0 last:pb-0">
                     <div className="flex-shrink-0 mt-1 p-2 bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center">
                        <step.icon className="h-4 w-4" />
@@ -127,7 +127,7 @@ export default function DashboardPage() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button asChild variant="link">
-                      <Link href="/dashboard/tutorial">Ver Tutorial Completo <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                      <Link href="/dashboard/tutorial"><BookOpenCheck className="mr-2 h-4 w-4" /> Ver Tutorial Completo</Link>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -150,8 +150,8 @@ export default function DashboardPage() {
                     <Image 
                       src={resource.imageUrl} 
                       alt={`Imagem para ${resource.title}`} 
-                      layout="fill" 
-                      objectFit="cover"
+                      fill 
+                      style={{objectFit: "cover"}}
                       data-ai-hint={resource.imageHint || "feature illustration"}
                     />
                   </div>
@@ -186,5 +186,3 @@ export default function DashboardPage() {
     </TooltipProvider>
   );
 }
-
-    
