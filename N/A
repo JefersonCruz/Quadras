@@ -1,0 +1,5 @@
+Essa frase é uma instrução para *mim*. Ela significa o seguinte:
+
+Quando você me pede para fazer alterações no código da sua aplicação (o que é a maioria dos seus pedidos), eu **não devo responder literalmente** com a frase "Omitted from agent history".
+
+Em vez disso, eu **devo** gerar as alterações de código no formato XML `<changes>...</changes>
