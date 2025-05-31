@@ -2,42 +2,83 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regra geral: permite leitura e escrita apenas para usuários autenticados.
-    // ATENÇÃO: Esta é uma regra permissiva para desenvolvimento.
-    // Em produção, você DEVE restringir o acesso por coleção e documento.
+    // Default: Deny all reads and writes
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
 
-    // Abaixo estão exemplos de como você pode começar a proteger coleções específicas.
-    // Descomente e adapte conforme necessário.
+    // Permitir que usuários autenticados criem e gerenciem seus próprios dados
+    // nas coleções principais.
+    // Ajuste 'owner' para o campo correto que armazena o UID do usuário.
+    
+    match /usuarios/{userId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null; // Permitir que qualquer usuário autenticado crie seu perfil
+    }
 
-    // Usuários só podem ler e escrever seus próprios documentos na coleção 'usuarios'.
-    // match /usuarios/{userId} {
-    //   allow read: if request.auth != null;
-    //   allow write: if request.auth.uid == userId;
-    // }
+    match /empresas/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
 
-    // Para coleções como 'clientes', 'projetos', 'etiquetas', 'fichasTecnicas', 'contratos', 'orcamentos',
-    // geralmente você quer que o usuário logado só acesse os documentos que ele criou (owner).
-    // Exemplo para 'clientes':
-    // match /clientes/{clienteId} {
-    //   allow read, delete: if request.auth != null && resource.data.owner == request.auth.uid;
-    //   allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
-    //   allow update: if request.auth != null && request.resource.data.owner == request.auth.uid && resource.data.owner == request.auth.uid;
-          // O 'resource.data.owner == request.auth.uid' no update garante que o owner não seja alterado.
-    // }
+    match /clientes/{clientId} {
+      function isClientOwner(clientId) {
+        return get(/databases/$(database)/documents/clientes/$(clientId)).data.owner == request.auth.uid;
+      }
+      allow read, write: if request.auth != null && isClientOwner(clientId);
+    }
+    
+    match /projetos/{projectId} {
+      function isProjectOwner(projectId) {
+        return get(/databases/$(database)/documents/projetos/$(projectId)).data.owner == request.auth.uid;
+      }
+      allow read, write: if request.auth != null && isProjectOwner(projectId);
+    }
 
-    // Coleções globais que administradores podem gerenciar (ex: globalLabelTemplates)
-    // match /globalLabelTemplates/{templateId} {
-    //   allow read: if request.auth != null; // Todos podem ler templates globais
-    //   allow write: if request.auth != null && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin'; // Apenas admins podem escrever
-    // }
+    match /etiquetas/{etiquetaId} {
+      function isLabelOwner(etiquetaId) {
+        return get(/databases/$(database)/documents/etiquetas/$(etiquetaId)).data.createdBy == request.auth.uid;
+      }
+      allow read, write: if request.auth != null && isLabelOwner(etiquetaId);
+    }
 
-    // Para a coleção 'empresas', geralmente o usuário só pode gerenciar sua própria empresa.
-    // O ID do documento da empresa é o UID do usuário.
-    // match /empresas/{userId} {
-    //   allow read, write: if request.auth != null && request.auth.uid == userId;
-    // }
+    match /fichasTecnicas/{fichaId} {
+      function isSheetOwner(fichaId) {
+        return get(/databases/$(database)/documents/fichasTecnicas/$(fichaId)).data.owner == request.auth.uid;
+      }
+      allow read, write: if request.auth != null && isSheetOwner(fichaId);
+    }
+
+    match /contratos/{contratoId} {
+      function isContractOwner(contratoId) {
+        return get(/databases/$(database)/documents/contratos/$(contratoId)).data.createdBy == request.auth.uid;
+      }
+      // Permite que o criador do contrato leia e escreva.
+      // Permite que qualquer pessoa (mesmo não autenticada) leia um contrato se for para assinatura (status != rascunho).
+      // Isso é necessário para a página pública de assinatura.
+      allow read: if request.auth != null && isContractOwner(contratoId) || 
+                      (get(/databases/$(database)/documents/contratos/$(contratoId)).data.status != 'rascunho');
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && isContractOwner(contratoId) || 
+                      // Permite que qualquer pessoa atualize assinaturas (para a página pública)
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assinaturas', 'status', 'dataUltimaModificacao', 'dataFinalizacaoAssinaturas']));
+    }
+    
+    match /orcamentos/{orcamentoId} {
+      function isQuoteOwner(orcamentoId) {
+        return get(/databases/$(database)/documents/orcamentos/$(orcamentoId)).data.createdBy == request.auth.uid;
+      }
+      allow read, write: if request.auth != null && isQuoteOwner(orcamentoId);
+    }
+
+    // Regras para Admin (globalLabelTemplates)
+    // Assume que documentos de usuário têm um campo 'role' == 'admin'
+    function isAdmin() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /globalLabelTemplates/{templateId} {
+      allow read: if request.auth != null; // Todos usuários autenticados podem ler templates globais
+      allow write: if request.auth != null && isAdmin(); // Apenas admins podem criar/editar/excluir
+    }
   }
 }
