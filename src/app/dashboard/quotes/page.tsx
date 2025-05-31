@@ -8,8 +8,8 @@ import { PlusCircle, Calculator, Search, Loader2, Eye, Edit3, FileText, External
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
-import type { Orcamento, Cliente, Projeto } from "@/types/firestore";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import type { Orcamento, Cliente, Projeto, Empresa } from "@/types/firestore";
+import { collection, query, where, getDocs, orderBy, doc, getDoc } from "firebase/firestore"; // Added getDoc
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import QuoteView from "@/components/dashboard/quotes/QuoteView"; // Import the new QuoteView component
 
 export default function QuotesPage() {
   const { user } = useAuth();
@@ -41,11 +42,14 @@ export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Orcamento[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [projects, setProjects] = useState<Projeto[]>([]);
+  const [companyData, setCompanyData] = useState<Empresa | null>(null); // State for company data
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [selectedQuoteForViewing, setSelectedQuoteForViewing] = useState<Orcamento | null>(null);
+  const [selectedClientForViewing, setSelectedClientForViewing] = useState<Cliente | null>(null);
+  const [selectedProjectForViewing, setSelectedProjectForViewing] = useState<Projeto | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
   const extractFirebaseIndexLink = (errorMessage: string): string => {
@@ -80,6 +84,15 @@ export default function QuotesPage() {
       const quotesData = quotesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Orcamento));
       setQuotes(quotesData);
 
+      // Fetch company data
+      const companyRef = doc(db, "empresas", user.uid);
+      const companySnap = await getDoc(companyRef);
+      if (companySnap.exists()) {
+        setCompanyData(companySnap.data() as Empresa);
+      } else {
+        setCompanyData(null);
+      }
+
     } catch (error: any) {
       console.error("Error fetching quotes or related data:", error);
        if (error.code === 'failed-precondition' && error.message && error.message.includes('index')) {
@@ -103,7 +116,7 @@ export default function QuotesPage() {
         toast({ title: "Erro ao buscar dados", description: "Não foi possível carregar orçamentos, clientes ou projetos.", variant: "destructive" });
         setFetchError(error.message || "Ocorreu um erro desconhecido ao buscar os dados.");
       }
-      setQuotes([]); // Clear quotes on error
+      setQuotes([]); 
     } finally {
       setLoading(false);
     }
@@ -120,7 +133,7 @@ export default function QuotesPage() {
   };
 
   const getProjectName = (projectId: string | undefined): string => {
-    if (!projectId) return "-"; // Return a dash if no project ID
+    if (!projectId) return "-"; 
     const project = projects.find(p => p.id === projectId);
     return project?.nome || "Projeto não vinculado";
   };
@@ -171,6 +184,8 @@ export default function QuotesPage() {
 
   const openViewDialog = (quote: Orcamento) => {
     setSelectedQuoteForViewing(quote);
+    setSelectedClientForViewing(clients.find(c => c.id === quote.clienteId) || null);
+    setSelectedProjectForViewing(projects.find(p => p.id === quote.projetoId) || null);
     setIsViewDialogOpen(true);
   };
 
@@ -318,65 +333,29 @@ export default function QuotesPage() {
 
       {selectedQuoteForViewing && (
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Detalhes do Orçamento</DialogTitle>
-              <DialogDescription>
-                Orçamento Nº: <span className="font-semibold">{selectedQuoteForViewing.numeroOrcamento}</span>
-                {selectedQuoteForViewing.id && <span className="block text-xs text-muted-foreground">ID: {selectedQuoteForViewing.id}</span>}
-              </DialogDescription>
+          <DialogContent className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl data-[state=open]:has-[[data-print-content]]:overflow-hidden">
+            <DialogHeader className="hidden print:block"> {/* Hidden on screen, shown on print */}
+                <DialogTitle>Orçamento Nº: {selectedQuoteForViewing.numeroOrcamento}</DialogTitle>
+                <DialogDescription>
+                  Cliente: {getClientName(selectedQuoteForViewing.clienteId)}
+                  {selectedQuoteForViewing.id && <span className="block text-xs text-muted-foreground">ID: {selectedQuoteForViewing.id}</span>}
+                </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="max-h-[65vh] p-1 pr-3">
-              <div className="space-y-4 text-sm py-4">
-                
-                <div className="p-3 border rounded-md bg-muted/30">
-                  <h4 className="font-semibold mb-1 text-foreground">Cliente e Projeto</h4>
-                  <p><strong>Cliente:</strong> {getClientName(selectedQuoteForViewing.clienteId)}</p>
-                  <p><strong>Projeto Vinculado:</strong> {getProjectName(selectedQuoteForViewing.projetoId)}</p>
-                </div>
-
-                <div className="p-3 border rounded-md">
-                  <h4 className="font-semibold mb-1 text-foreground">Datas e Status</h4>
-                  <p><strong>Data de Criação:</strong> {selectedQuoteForViewing.dataCriacao ? format(selectedQuoteForViewing.dataCriacao.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}</p>
-                  <p><strong>Data de Validade:</strong> {selectedQuoteForViewing.dataValidade ? format(selectedQuoteForViewing.dataValidade.toDate(), "dd/MM/yyyy", { locale: ptBR }) : 'N/A'}</p>
-                  <p><strong>Status:</strong> <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${getStatusClasses(selectedQuoteForViewing.status)}`}>{getStatusLabel(selectedQuoteForViewing.status)}</span></p>
-                </div>
-                
-                <div className="p-3 border rounded-md">
-                  <h4 className="font-semibold mb-1 text-foreground">Serviços e Valor</h4>
-                  <div>
-                    <h5 className="font-medium text-muted-foreground">Descrição dos Serviços/Escopo:</h5>
-                    <p className="whitespace-pre-wrap mt-1">{selectedQuoteForViewing.descricaoServicos || "Nenhuma descrição fornecida."}</p>
-                  </div>
-                  <p className="mt-2"><strong>Valor Total Estimado:</strong> <span className="font-semibold text-lg">R$ {selectedQuoteForViewing.valorTotalEstimado.toFixed(2)}</span></p>
-                </div>
-
-                {selectedQuoteForViewing.observacoes && (
-                  <div className="p-3 border rounded-md">
-                    <h4 className="font-semibold mb-1 text-foreground">Observações:</h4>
-                    <p className="whitespace-pre-wrap">{selectedQuoteForViewing.observacoes}</p>
-                  </div>
-                )}
-
-                {(selectedQuoteForViewing.empresaNome || selectedQuoteForViewing.empresaCnpj) && (
-                    <div className="p-3 border rounded-md bg-muted/30">
-                        <h4 className="font-semibold mb-1 text-foreground">Emitido por:</h4>
-                        <p>{selectedQuoteForViewing.empresaNome || "Empresa não informada"}</p>
-                        {selectedQuoteForViewing.empresaCnpj && <p className="text-xs text-muted-foreground">CNPJ: {selectedQuoteForViewing.empresaCnpj}</p>}
-                        {selectedQuoteForViewing.empresaTelefone && <p className="text-xs text-muted-foreground">Telefone: {selectedQuoteForViewing.empresaTelefone}</p>}
-                        {selectedQuoteForViewing.empresaEmail && <p className="text-xs text-muted-foreground">Email: {selectedQuoteForViewing.empresaEmail}</p>}
-                        {selectedQuoteForViewing.empresaLogotipoUrl && (
-                            <div className="mt-2">
-                                <img src={selectedQuoteForViewing.empresaLogotipoUrl} alt="Logotipo da Empresa" className="max-h-12 border rounded p-1 bg-background" data-ai-hint="company logo" />
-                            </div>
-                        )}
-                    </div>
-                )}
-              </div>
+            {/* The data-print-content attribute is a custom marker for potential print-specific styling */}
+            <ScrollArea className="max-h-[80vh] data-[print-content]:max-h-none data-[print-content]:overflow-visible">
+              <QuoteView 
+                quote={selectedQuoteForViewing} 
+                client={selectedClientForViewing}
+                project={selectedProjectForViewing}
+                company={companyData}
+              />
             </ScrollArea>
-            <DialogFooter className="sm:justify-start pt-4">
+            <DialogFooter className="sm:justify-start pt-4 print:hidden">
+              <Button type="button" variant="outline" onClick={() => window.print()}>
+                Imprimir / Salvar PDF
+              </Button>
               <DialogClose asChild>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="secondary">
                   Fechar
                 </Button>
               </DialogClose>
@@ -388,4 +367,3 @@ export default function QuotesPage() {
     </div>
   );
 }
-

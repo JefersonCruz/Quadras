@@ -15,6 +15,7 @@ export interface Empresa {
   logotipo?: string; // URL
   bannerUrl?: string; // URL for banner image
   owner: string; // UID
+  chavePix?: string; // Chave PIX para QR Code
 }
 
 export interface Cliente {
@@ -193,10 +194,10 @@ export interface GlobalLabelTemplate {
 
 // --- Orçamentos (Quotes/Estimates) Types ---
 export interface OrcamentoItem {
-  id?: string; // Could be useful if items are stored separately later
+  id?: string; 
   descricao: string;
   quantidade: number;
-  unidadeMedida: string; // Ex: 'un', 'm²', 'h'
+  unidadeMedida: string; // Ex: 'un', 'm²', 'h', 'vb' (verba)
   precoUnitario: number;
   precoTotal: number; // quantidade * precoUnitario
 }
@@ -210,18 +211,17 @@ export interface Orcamento {
   dataCriacao: Timestamp;
   dataValidade: Timestamp;
   descricaoServicos: string; // General description of services/scope
-  // itens?: OrcamentoItem[]; // For detailed line items - future enhancement
-  valorTotalEstimado: number;
+  itensMaoDeObra?: OrcamentoItem[]; // Detalhamento de Mão de Obra
+  itensMateriais?: OrcamentoItem[]; // Detalhamento de Materiais
+  valorTotalEstimado: number; // Este será o valor total, podendo ser calculado a partir dos itens ou inserido diretamente
   status: 'rascunho' | 'enviado' | 'visualizado' | 'aprovado' | 'rejeitado' | 'expirado' | 'convertido_os';
-  observacoes?: string; // Optional notes
-  // Campos da empresa que emitiu o orçamento (para o PDF)
+  observacoes?: string; // Para condições de pagamento, garantia, etc.
   empresaNome?: string;
   empresaCnpj?: string;
   empresaEndereco?: string;
   empresaTelefone?: string;
   empresaEmail?: string;
   empresaLogotipoUrl?: string;
-  // Campos para o link temporário (para o futuro)
   linkTemporarioUrl?: string;
   linkTemporarioExpiraEm?: Timestamp;
 }
