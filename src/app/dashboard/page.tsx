@@ -18,7 +18,7 @@ import {
   FilePlus2,
   Settings,
   BookOpenCheck,
-  FileSignature // <<< Added FileSignature here
+  FileSignature // <<< Garantindo que FileSignature está aqui
 } from "lucide-react";
 import {
   Tooltip,
@@ -186,4 +186,5 @@ export default function DashboardPage() {
       </div>
     </TooltipProvider>
   );
-}
+
+    
