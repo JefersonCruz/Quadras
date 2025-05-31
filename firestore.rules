@@ -1,159 +1,91 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Função auxiliar para verificar se o usuário é um administrador
-    function isAdmin() {
-      return request.auth != null &&
-             exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+    // Regra padrão: Requer autenticação para qualquer acesso.
+    // EM PRODUÇÃO: Refine essas regras para serem mais específicas!
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
 
-    // Coleção de Usuários
+    // Exemplo para a coleção 'usuarios':
+    // Permite que um usuário leia seu próprio documento.
+    // Permite que um usuário crie seu próprio documento (ao se cadastrar).
+    // Permite que um usuário atualize seu próprio documento.
+    // Nega a exclusão por qualquer usuário (geralmente feito por admin ou functions).
     match /usuarios/{userId} {
-      allow read: if request.auth.uid == userId || isAdmin();
-      // Permite que o usuário crie seu próprio documento se o ID do documento corresponder ao seu UID
-      allow create: if request.auth.uid == userId && request.resource.id == userId;
-      // Permite que o usuário atualize seus próprios dados, ou um admin pode atualizar qualquer usuário
-      allow update: if request.auth.uid == userId || isAdmin();
-      // A exclusão de documentos de usuário geralmente é restrita ou tratada por admin/funções específicas
-      // Exemplo: allow delete: if isAdmin();
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null; // Ou pode ser mais específico se o ID do documento DEVE ser o UID do usuário
+      allow delete: if false; // Ou if get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Coleção de Clientes
-    // Assume que 'clientes' tem um campo 'owner' com o UID do usuário
-    match /clientes/{clienteId} {
-      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.owner || isAdmin());
-      allow create: if request.auth != null && (request.auth.uid == request.resource.data.owner || isAdmin());
+    // Exemplo para a coleção 'empresas':
+    // O 'owner' do documento da empresa (que é o userId) pode ler, criar e atualizar.
+    match /empresas/{userId} {
+      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Apenas admins ou functions podem deletar
     }
 
-    // Coleção de Projetos
-    // Assume que 'projetos' tem um campo 'owner' com o UID do usuário
+    // Exemplo para 'clientes':
+    // Apenas o 'owner' (usuário que criou) pode gerenciar seus clientes.
+    match /clientes/{clientId} {
+      allow read, write: if request.auth != null && resource.data.owner == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
+    }
+
+    // Exemplo para 'projetos':
+    // Apenas o 'owner' pode gerenciar seus projetos.
     match /projetos/{projetoId} {
-      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.owner || isAdmin());
-      allow create: if request.auth != null && (request.auth.uid == request.resource.data.owner || isAdmin());
+      allow read, write: if request.auth != null && resource.data.owner == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
     }
 
-    // Coleção de Fichas Técnicas
-    // Assume que 'fichasTecnicas' tem um campo 'owner' com o UID do usuário
-    match /fichasTecnicas/{fichaId} {
-      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.owner || isAdmin());
-      allow create: if request.auth != null && (request.auth.uid == request.resource.data.owner || isAdmin());
-    }
-
-    // Coleção de Empresas
-    // Assume que o ID do documento na coleção 'empresas' é o UID do proprietário
-    match /empresas/{empresaOwnerId} {
-      allow read, update, delete: if request.auth != null && (request.auth.uid == empresaOwnerId || isAdmin());
-      allow create: if request.auth != null && (request.auth.uid == empresaOwnerId && request.resource.id == empresaOwnerId || isAdmin());
-    }
-
-    // Coleção de Etiquetas
-    // Assume que 'etiquetas' tem um campo 'createdBy' com o UID do usuário
+    // Exemplo para 'etiquetas':
+    // Apenas o 'createdBy' (usuário que criou) pode gerenciar suas etiquetas.
     match /etiquetas/{etiquetaId} {
-      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.createdBy || isAdmin());
-      allow create: if request.auth != null && (request.auth.uid == request.resource.data.createdBy || isAdmin());
+      allow read, write: if request.auth != null && resource.data.createdBy == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
     }
 
-    // Coleção de Contratos
-    match /contratos/{contractId} {
-      // --- Helpers para dados do contrato e da requisição ---
-      function contractResource() {
-        return resource.data;
-      }
-      function incomingContractData() {
-        return request.resource.data;
-      }
-      function authedUserEmail() {
-        // Verifica se request.auth e request.auth.token existem antes de acessar o email
-        return request.auth != null && request.auth.token != null ? request.auth.token.email : null;
-      }
+    // Exemplo para 'fichasTecnicas':
+    // Apenas o 'owner' pode gerenciar suas fichas.
+    match /fichasTecnicas/{fichaId} {
+      allow read, write: if request.auth != null && resource.data.owner == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
+    }
+    
+    // Exemplo para 'contratos':
+    // O criador ('createdBy') pode gerenciar (ler, escrever, criar).
+    // Assinantes (cliente, prestador, testemunhas) podem ler o contrato se estiverem envolvidos (lógica mais complexa, simplificada aqui).
+    // Qualquer um pode ler um contrato público (se houver um campo `publico == true`, por exemplo).
+    match /contratos/{contratoId} {
+      allow read: if request.auth != null && 
+                      (resource.data.createdBy == request.auth.uid ||
+                       resource.data.cliente.email == request.auth.token.email ||
+                       resource.data.empresaPrestador.email == request.auth.token.email ||
+                       (resource.data.testemunhas[0] != null && resource.data.testemunhas[0].email == request.auth.token.email) ||
+                       (resource.data.testemunhas[1] != null && resource.data.testemunhas[1].email == request.auth.token.email));
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null && resource.data.createdBy == request.auth.uid; // O criador pode atualizar
+                      // Adicionar lógica para permitir que partes específicas atualizem seus campos de assinatura
+                      // Ex: request.auth.token.email == resource.data.cliente.email && request.resource.data.assinaturas.cliente != resource.data.assinaturas.cliente
 
-      // --- PERMISSÕES DE LEITURA (GET) ---
-      // Criador, Admin podem ler. Cliente e Testemunhas podem ler se o email autenticado corresponder.
-      allow get: if request.auth != null && (
-                    request.auth.uid == contractResource().createdBy ||
-                    isAdmin() ||
-                    (contractResource().cliente != null && authedUserEmail() == contractResource().cliente.email) ||
-                    (contractResource().testemunhas != null && contractResource().testemunhas[0] != null && authedUserEmail() == contractResource().testemunhas[0].email) ||
-                    (contractResource().testemunhas != null && contractResource().testemunhas[1] != null && authedUserEmail() == contractResource().testemunhas[1].email)
-                  );
-
-      // --- PERMISSÕES DE CRIAÇÃO (CREATE) ---
-      // Somente o criador (prestador) ou admin podem criar.
-      allow create: if request.auth != null &&
-                     (request.auth.uid == incomingContractData().createdBy || isAdmin());
-
-      // --- PERMISSÕES DE EXCLUSÃO (DELETE) ---
-      allow delete: if request.auth != null &&
-                      (request.auth.uid == contractResource().createdBy || isAdmin());
-
-      // --- PERMISSÕES DE ATUALIZAÇÃO (UPDATE) ---
-      allow update: if request.auth != null && (
-                      // REGRA 1: Criador/Admin pode atualizar campos gerais (exceto sobrescrever assinaturas de outros)
-                      (
-                        (request.auth.uid == contractResource().createdBy || isAdmin()) &&
-                        // Lista de campos que NÃO podem ser sobrescritos diretamente pelo criador/admin (são definidos pelos signatários)
-                        !( incomingContractData().diff(contractResource()).affectedKeys().hasAny([
-                            'assinaturas.cliente', 'assinaturas.testemunha1', 'assinaturas.testemunha2', 'assinaturas.prestador'
-                           ])
-                        )
-                      ) ||
-                      // REGRA 2: Um signatário (cliente, testemunha, prestador) pode atualizar seu próprio slot de assinatura
-                      // e os campos de status relacionados.
-                      (
-                        // Lista de campos que um signatário PODE modificar no documento do contrato:
-                        // 'assinaturas' (o seu próprio slot), 'status', 'dataUltimaModificacao', 'dataFinalizacaoAssinaturas'
-                        incomingContractData().diff(contractResource()).affectedKeys().hasOnly(['assinaturas', 'status', 'dataUltimaModificacao', 'dataFinalizacaoAssinaturas']) &&
-                        // Verifica se o status está em uma transição válida
-                        (incomingContractData().status == 'parcialmente_assinado' || incomingContractData().status == 'assinado') &&
-                        (
-                          // Cliente assinando
-                          ( contractResource().cliente != null && authedUserEmail() == contractResource().cliente.email &&
-                            incomingContractData().assinaturas.cliente.dataHora == request.time &&
-                            incomingContractData().assinaturas.cliente.nome == contractResource().cliente.nome &&
-                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['cliente'])) &&
-                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['cliente'])) // Para a primeira assinatura no mapa
-                          ) ||
-                          // Testemunha 1 assinando
-                          ( contractResource().testemunhas != null && contractResource().testemunhas[0] != null && authedUserEmail() == contractResource().testemunhas[0].email &&
-                            incomingContractData().assinaturas.testemunha1.dataHora == request.time &&
-                            incomingContractData().assinaturas.testemunha1.nome == contractResource().testemunhas[0].nome &&
-                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha1'])) &&
-                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['testemunha1']))
-                          ) ||
-                          // Testemunha 2 assinando
-                          ( contractResource().testemunhas != null && contractResource().testemunhas[1] != null && authedUserEmail() == contractResource().testemunhas[1].email &&
-                            incomingContractData().assinaturas.testemunha2.dataHora == request.time &&
-                            incomingContractData().assinaturas.testemunha2.nome == contractResource().testemunhas[1].nome &&
-                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['testemunha2'])) &&
-                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['testemunha2']))
-                          ) ||
-                          // Prestador (criador) assinando via este fluxo
-                          ( request.auth.uid == contractResource().createdBy && contractResource().empresaPrestador != null && // Garante que empresaPrestador exista
-                            incomingContractData().assinaturas.prestador.dataHora == request.time &&
-                            incomingContractData().assinaturas.prestador.nome == contractResource().empresaPrestador.responsavelTecnico &&
-                            (contractResource().assinaturas == null || incomingContractData().assinaturas.diff(contractResource().assinaturas).affectedKeys().hasOnly(['prestador'])) &&
-                            (contractResource().assinaturas != null || incomingContractData().assinaturas.keys().hasOnly(['prestador']))
-                          )
-                        )
-                      )
-                    );
-    } // Fim do match /contratos/{contractId}
-
-    // Coleção de Orçamentos
-    match /orcamentos/{orcamentoId} {
-      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.createdBy || isAdmin());
-      allow create: if request.auth != null && (request.auth.uid == request.resource.data.createdBy || isAdmin());
+      allow delete: if false; // Normalmente, apenas admins ou functions deletam contratos.
     }
 
-    // Global Templates (exemplo, não usado atualmente mas bom para estrutura)
-    // Renomeado para globalLabelTemplates para corresponder à coleção usada no admin panel
+    // Coleção para templates globais de etiquetas (gerenciado por admin)
     match /globalLabelTemplates/{templateId} {
-      allow read: if request.auth != null; // Todos os usuários autenticados podem ler
-      allow write: if isAdmin();           // Apenas admins podem escrever
+      allow read: if request.auth != null; // Todos autenticados podem ler os templates globais
+      allow write: if request.auth != null && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
     }
 
-  } // Fim do match /databases/{database}/documents
-} // Fim do service cloud.firestore
+    // Coleção para orçamentos
+    match /orcamentos/{orcamentoId} {
+      allow read, write: if request.auth != null && resource.data.createdBy == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+    }
+
+  }
+}
