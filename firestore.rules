@@ -1,115 +1,43 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Default deny all access unless explicitly allowed by a more specific rule.
+    // Regra geral: permite leitura e escrita apenas para usuários autenticados.
+    // ATENÇÃO: Esta é uma regra permissiva para desenvolvimento.
+    // Em produção, você DEVE restringir o acesso por coleção e documento.
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
 
-    // Usuarios:
-    // - Logged-in users can create their own user document (e.g., on signup).
-    // - Logged-in users can read, update, and delete their own user document.
-    // - Admins can read any user document (useful for user management pages).
-    match /usuarios/{userId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
-      allow list: if request.auth != null && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin'; // Admin can list users
-    }
+    // Abaixo estão exemplos de como você pode começar a proteger coleções específicas.
+    // Descomente e adapte conforme necessário.
 
-    // Clientes:
-    // - Logged-in users can create clients if they are the owner.
-    // - Only the owner of a client document can read, update, or delete it.
-    match /clientes/{clienteId} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.owner;
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.owner;
-      // For listing, typically done by owner on their dashboard
-      allow list: if request.auth != null; // Allow any authenticated user to list if they query by owner.
-                                          // The query itself in the app must enforce where('owner', '==', request.auth.uid)
-    }
+    // Usuários só podem ler e escrever seus próprios documentos na coleção 'usuarios'.
+    // match /usuarios/{userId} {
+    //   allow read: if request.auth != null;
+    //   allow write: if request.auth.uid == userId;
+    // }
 
-    // Projetos:
-    // - Similar logic to Clientes.
-    match /projetos/{projetoId} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.owner;
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.owner;
-      allow list: if request.auth != null; // Query must enforce owner
-    }
+    // Para coleções como 'clientes', 'projetos', 'etiquetas', 'fichasTecnicas', 'contratos', 'orcamentos',
+    // geralmente você quer que o usuário logado só acesse os documentos que ele criou (owner).
+    // Exemplo para 'clientes':
+    // match /clientes/{clienteId} {
+    //   allow read, delete: if request.auth != null && resource.data.owner == request.auth.uid;
+    //   allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
+    //   allow update: if request.auth != null && request.resource.data.owner == request.auth.uid && resource.data.owner == request.auth.uid;
+          // O 'resource.data.owner == request.auth.uid' no update garante que o owner não seja alterado.
+    // }
 
-    // Etiquetas:
-    // - Only the creator can manage their etiquetas.
-    match /etiquetas/{etiquetaId} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.createdBy;
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
-      allow list: if request.auth != null; // Query must enforce createdBy
-    }
+    // Coleções globais que administradores podem gerenciar (ex: globalLabelTemplates)
+    // match /globalLabelTemplates/{templateId} {
+    //   allow read: if request.auth != null; // Todos podem ler templates globais
+    //   allow write: if request.auth != null && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin'; // Apenas admins podem escrever
+    // }
 
-    // FichasTecnicas:
-    // - Only the owner can manage their fichas tecnicas.
-    match /fichasTecnicas/{fichaId} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.owner;
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.owner;
-      allow list: if request.auth != null; // Query must enforce owner
-    }
-    
-    // Orcamentos:
-    // - Only the creator can manage their orcamentos.
-    match /orcamentos/{orcamentoId} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.createdBy;
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
-      allow list: if request.auth != null; // Query must enforce createdBy
-    }
-
-    // Contratos:
-    // - Only the creator can manage their contratos.
-    // - Parties involved in the contract (prestador, cliente, testemunhas) might need read access
-    //   even if not the creator. This is complex and depends on how your signing page works.
-    //   For simplicity, direct read is limited to the creator. Public signing pages often use
-    //   backend functions to fetch data securely.
-    match /contratos/{contratoId} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.createdBy;
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
-      allow list: if request.auth != null; // Query must enforce createdBy
-
-      // If a contract needs to be publicly readable for signing by a URL without Firebase Auth on the client-side,
-      // you'd need a different approach (e.g., a Cloud Function endpoint or very open read rules based on a 'public' flag, which is less secure).
-      // For now, assuming signing page might check if a user (client, witness) is authenticated and listed on the contract.
-      // This can get complex, this is a basic rule:
-      allow read: if request.auth != null && (
-                    request.auth.uid == resource.data.createdBy ||
-                    request.auth.email == resource.data.cliente.email ||
-                    (resource.data.testemunhas[0] != null && request.auth.email == resource.data.testemunhas[0].email) ||
-                    (resource.data.testemunhas[1] != null && request.auth.email == resource.data.testemunhas[1].email) ||
-                    (resource.data.empresaPrestador != null && request.auth.email == resource.data.empresaPrestador.email) // Assuming company has an email, or use UID if provider signs in as user
-                  );
-      // For updating signatures (this needs refinement based on who is signing):
-      // Example: Client can update their own signature slot
-      allow update: if request.auth != null &&
-                       request.resource.data.assinaturas.cliente.email == request.auth.email &&
-                       request.resource.data.assinaturas.cliente.dataHora == request.time && // only allow setting their own signature with current time
-                       !resource.data.assinaturas.cliente.dataHora; // only if not already signed
-      // Similar rules would be needed for prestador, testemunha1, testemunha2
-      // This is simplified; real signature updates are complex to secure properly.
-    }
-
-    // Empresas (User's company profile):
-    // - User can create their own company profile (usually ID is user's UID).
-    // - User can read, update, delete their own company profile.
-    match /empresas/{empresaId} {
-      allow create: if request.auth != null && request.auth.uid == empresaId; // Assuming empresaId is the user's UID
-      allow read, update, delete: if request.auth != null && request.auth.uid == empresaId;
-    }
-
-    // GlobalLabelTemplates:
-    // - All authenticated users can read global templates.
-    // - Only admins can create, update, or delete global templates.
-    match /globalLabelTemplates/{templateId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if request.auth != null && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
-    }
+    // Para a coleção 'empresas', geralmente o usuário só pode gerenciar sua própria empresa.
+    // O ID do documento da empresa é o UID do usuário.
+    // match /empresas/{userId} {
+    //   allow read, write: if request.auth != null && request.auth.uid == userId;
+    // }
   }
 }
-
-    
